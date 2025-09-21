@@ -7,133 +7,30 @@
 
     <div class="scene-settings">
       <div class="scene-grid">
-        <!-- 干扰设置 -->
-        <div class="scene-card">
-          <div class="card-header">
-            <i class="card-icon">⚡</i>
-            <h4>干扰设置</h4>
-          </div>
-          <div class="card-content">
-            <div class="form-group">
-              <label>干扰类型</label>
-              <select v-model="settings.interference.type" class="select-field">
-                <option value="none">无干扰</option>
-                <option value="white">白噪声</option>
-                <option value="narrow">窄带干扰</option>
-                <option value="pulse">脉冲干扰</option>
-                <option value="sweep">扫频干扰</option>
-              </select>
-            </div>
-            <div class="slider-container">
-              <label class="slider-label">
-                干扰强度: <span class="value">{{ settings.interference.intensity }}dB</span>
-              </label>
-              <input type="range"
-                     class="slider"
-                     v-model="settings.interference.intensity"
-                     min="-50"
-                     max="10"
-                     step="1">
-              <div class="range-labels">
-                <span>-50dB</span>
-                <span>10dB</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 噪声设置 -->
+        <!-- 多普勒设置 -->
         <div class="scene-card">
           <div class="card-header">
             <i class="card-icon">🌊</i>
-            <h4>噪声设置</h4>
+            <h4>多普勒设置</h4>
           </div>
           <div class="card-content">
             <div class="form-group">
-              <label>噪声类型</label>
-              <select v-model="settings.noise.type" class="select-field">
-                <option value="awgn">高斯白噪声</option>
-                <option value="colored">有色噪声</option>
-                <option value="impulsive">冲击噪声</option>
-                <option value="phase">相位噪声</option>
+              <label>多普勒类型</label>
+              <select v-model="sceneSettings.doppler.type" class="select-field">
+                <option value="none">无多普勒</option>
+                <option value="constant">恒定多普勒</option>
+                <option value="linear">线性多普勒</option>
+                <option value="sinusoidal">正弦多普勒</option>
+                <option value="random">随机多普勒</option>
               </select>
             </div>
             <div class="slider-container">
               <label class="slider-label">
-                信噪比: <span class="value">{{ settings.noise.snr }}dB</span>
+                多普勒频移: <span class="value">{{ sceneSettings.doppler.frequency }}Hz</span>
               </label>
               <input type="range"
                      class="slider"
-                     v-model="settings.noise.snr"
-                     min="-10"
-                     max="30"
-                     step="0.5">
-              <div class="range-labels">
-                <span>-10dB</span>
-                <span>30dB</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 动态设置 -->
-        <div class="scene-card">
-          <div class="card-header">
-            <i class="card-icon">🚀</i>
-            <h4>动态设置</h4>
-          </div>
-          <div class="card-content">
-            <div class="form-group">
-              <label>运动模式</label>
-              <select v-model="settings.dynamic.mode" class="select-field">
-                <option value="static">静态</option>
-                <option value="linear">匀速运动</option>
-                <option value="acceleration">加速运动</option>
-                <option value="circular">圆周运动</option>
-                <option value="orbit">轨道运动</option>
-              </select>
-            </div>
-            <div class="slider-container">
-              <label class="slider-label">
-                速度: <span class="value">{{ settings.dynamic.velocity }}m/s</span>
-              </label>
-              <input type="range"
-                     class="slider"
-                     v-model="settings.dynamic.velocity"
-                     min="0"
-                     max="1000"
-                     step="10">
-              <div class="range-labels">
-                <span>0m/s</span>
-                <span>1000m/s</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 信道设置 -->
-        <div class="scene-card">
-          <div class="card-header">
-            <i class="card-icon">📻</i>
-            <h4>信道设置</h4>
-          </div>
-          <div class="card-content">
-            <div class="form-group">
-              <label>信道模型</label>
-              <select v-model="channelModel" class="select-field">
-                <option value="awgn">AWGN信道</option>
-                <option value="rayleigh">瑞利衰落</option>
-                <option value="rician">莱斯衰落</option>
-                <option value="multipath">多径信道</option>
-              </select>
-            </div>
-            <div class="slider-container">
-              <label class="slider-label">
-                多普勒频移: <span class="value">{{ dopplerShift }}Hz</span>
-              </label>
-              <input type="range"
-                     class="slider"
-                     v-model="dopplerShift"
+                     v-model="sceneSettings.doppler.frequency"
                      min="-1000"
                      max="1000"
                      step="10">
@@ -142,30 +39,21 @@
                 <span>1000Hz</span>
               </div>
             </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="control-panel">
-        <div class="control-buttons">
-          <button class="btn btn-success" @click="$emit('start-simulation')">
-            <i>▶️</i>
-            开始仿真
-          </button>
-          <button class="btn btn-primary" @click="$emit('reset-settings')">
-            <i>🔄</i>
-            重置设置
-          </button>
-          <button class="btn btn-danger" @click="$emit('stop-simulation')">
-            <i>⏹️</i>
-            停止仿真
-          </button>
-        </div>
-
-        <div class="simulation-status">
-          <div class="status-indicator">
-            <span class="status-dot" :class="simulationStatus"></span>
-            <span>{{ getStatusText() }}</span>
+            <div class="slider-container">
+              <label class="slider-label">
+                变化率: <span class="value">{{ sceneSettings.doppler.rate }}Hz/s</span>
+              </label>
+              <input type="range"
+                     class="slider"
+                     v-model="sceneSettings.doppler.rate"
+                     min="0"
+                     max="100"
+                     step="1">
+              <div class="range-labels">
+                <span>0Hz/s</span>
+                <span>100Hz/s</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -174,45 +62,16 @@
 </template>
 
 <script setup lang="ts">
-  import { ref } from 'vue'
+  import { reactive } from 'vue'
 
-  interface SceneSettings {
-    interference: {
-      type: string
-      intensity: number
+  // 创建一个本地的场景设置对象
+  const sceneSettings = reactive({
+    doppler: {
+      type: 'none',
+      frequency: 0,
+      rate: 10
     }
-    noise: {
-      type: string
-      snr: number
-    }
-    dynamic: {
-      mode: string
-      velocity: number
-    }
-  }
-
-  defineProps<{
-    settings: SceneSettings
-  }>()
-
-  defineEmits<{
-    'start-simulation': []
-    'reset-settings': []
-    'stop-simulation': []
-  }>()
-
-  const channelModel = ref('awgn')
-  const dopplerShift = ref(0)
-  const simulationStatus = ref('stopped')
-
-  const getStatusText = () => {
-    switch (simulationStatus.value) {
-      case 'running': return '仿真运行中'
-      case 'stopped': return '仿真已停止'
-      case 'paused': return '仿真暂停'
-      default: return '未知状态'
-    }
-  }
+  })
 </script>
 
 <style scoped>
@@ -257,9 +116,10 @@
 
   .scene-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    grid-template-columns: 1fr;
     gap: 25px;
-    margin-bottom: 30px;
+    max-width: 600px;
+    margin: 0 auto;
   }
 
   .scene-card {
@@ -396,137 +256,13 @@
     color: #6c757d;
   }
 
-  .control-panel {
-    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
-    border-radius: 12px;
-    padding: 25px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border: 2px solid #e9ecef;
-  }
-
-  .control-buttons {
-    display: flex;
-    gap: 15px;
-  }
-
-  .btn {
-    padding: 12px 30px;
-    border: none;
-    border-radius: 25px;
-    font-size: 16px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .btn-primary {
-    background: linear-gradient(135deg, #007bff, #0056b3);
-    color: white;
-  }
-
-    .btn-primary:hover {
-      background: linear-gradient(135deg, #0056b3, #004085);
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 123, 255, 0.4);
-    }
-
-  .btn-success {
-    background: linear-gradient(135deg, #28a745, #1e7e34);
-    color: white;
-  }
-
-    .btn-success:hover {
-      background: linear-gradient(135deg, #1e7e34, #155724);
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
-    }
-
-  .btn-danger {
-    background: linear-gradient(135deg, #dc3545, #bd2130);
-    color: white;
-  }
-
-    .btn-danger:hover {
-      background: linear-gradient(135deg, #bd2130, #a71e2a);
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(220, 53, 69, 0.4);
-    }
-
-  .simulation-status {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .status-indicator {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-weight: 500;
-    color: #2c3e50;
-  }
-
-  .status-dot {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    animation: pulse 2s infinite;
-  }
-
-    .status-dot.running {
-      background: #28a745;
-    }
-
-    .status-dot.stopped {
-      background: #6c757d;
-    }
-
-    .status-dot.paused {
-      background: #ffc107;
-    }
-
-  @keyframes pulse {
-    0% {
-      transform: scale(1);
-      opacity: 1;
-    }
-
-    50% {
-      transform: scale(1.1);
-      opacity: 0.7;
-    }
-
-    100% {
-      transform: scale(1);
-      opacity: 1;
-    }
-  }
-
   @media (max-width: 768px) {
     .scene-grid {
-      grid-template-columns: 1fr;
+      max-width: 100%;
     }
 
-    .control-panel {
-      flex-direction: column;
-      gap: 20px;
-    }
-
-    .control-buttons {
-      flex-direction: column;
-      width: 100%;
-    }
-
-    .btn {
-      width: 100%;
-      justify-content: center;
+    .scene-settings {
+      padding: 20px;
     }
   }
-
- </style>
+</style>
