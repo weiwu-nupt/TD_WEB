@@ -5,142 +5,99 @@
       <h2>参数设置</h2>
     </div>
 
-    <div class="tab-container">
-      <nav class="tab-nav">
-        <button v-for="tab in paramTabs"
-                :key="tab.id"
-                :class="{ active: activeTab === tab.id }"
-                @click="$emit('update-tab', tab.id)"
-                class="tab-button">
-          <i :class="tab.icon"></i>
-          {{ tab.name }}
-        </button>
-      </nav>
+    <div class="tab-content">
+      <!-- 循环显示所有通道,不再使用标签页 -->
+      <div v-for="tab in paramTabs" :key="tab.id" class="channel-card">
+        <div class="channel-header">
+          <i>{{ tab.icon }}</i>
+          <h3>{{ tab.name }}</h3>
+        </div>
 
-      <div class="tab-content">
-        <div v-for="tab in paramTabs"
-             :key="tab.id"
-             v-show="activeTab === tab.id"
-             class="tab-panel">
-          <div class="form-grid">
-            <div v-for="(field, index) in tab.fields" :key="index" class="form-group">
-              <label :for="`field-${tab.id}-${index}`" class="field-label">{{ field.label }}</label>
+        <div class="form-grid">
+          <div v-for="(field, index) in tab.fields" :key="index" class="form-group">
+            <label :for="`field-${tab.id}-${index}`" class="field-label">{{ field.label }}</label>
 
-              <!-- 数字输入框 -->
-              <input v-if="field.type === 'number'"
-                     :id="`field-${tab.id}-${index}`"
-                     type="number"
-                     :placeholder="field.placeholder"
-                     :value="field.value"
-                     @input="field.value = $event.target.value"
-                     class="input-field" />
+            <!-- 数字输入框 -->
+            <input v-if="field.type === 'number'"
+                   :id="`field-${tab.id}-${index}`"
+                   type="number"
+                   :placeholder="field.placeholder"
+                   :value="field.value"
+                   @input="field.value = $event.target.value"
+                   class="input-field" />
 
-              <!-- 下拉选择框 -->
-              <select v-else-if="field.type === 'select'"
-                      :id="`field-${tab.id}-${index}`"
-                      :value="field.value"
-                      @change="field.value = $event.target.value"
-                      class="select-field">
-                <option v-for="option in field.options"
-                        :key="option.value"
-                        :value="option.value">
-                  {{ option.label }}
-                </option>
-              </select>
-
-              <!-- 滑块控件（扩频因子） -->
-              <div v-else-if="field.type === 'range'" class="slider-container">
-                <div class="slider-label">
-                  <span>{{ field.label }}: </span>
-                  <span class="value">{{ field.value }}{{ field.unit }}</span>
-                </div>
-                <input type="range"
-                       class="slider"
-                       v-model="field.value"
-                       :min="field.min"
-                       :max="field.max"
-                       :step="field.step">
-                <div class="range-labels">
-                  <span>{{ field.min }}{{ field.unit }}</span>
-                  <span>{{ field.max }}{{ field.unit }}</span>
-                </div>
-              </div>
-            </div>
+            <!-- 下拉选择框 -->
+            <select v-else-if="field.type === 'select'"
+                    :id="`field-${tab.id}-${index}`"
+                    :value="field.value"
+                    @change="field.value = $event.target.value"
+                    class="select-field">
+              <option v-for="option in field.options"
+                      :key="option.value"
+                      :value="option.value">
+                {{ option.label }}
+              </option>
+            </select>
           </div>
         </div>
+      </div>
+
+      <!-- 读取和写入按钮 -->
+      <div class="action-buttons">
+        <button class="read-button" @click="readParameters">
+          📥 读取
+        </button>
+        <button class="write-button" @click="writeParameters">
+          📤 写入
+        </button>
       </div>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
-  import { reactive } from 'vue'
-  import FormField from './FormField.vue'
+  import { reactive, onMounted } from 'vue'
+  import axios from 'axios'
 
-  interface ParameterField {
-    label: string
-    type: string
-    value: string | number
-    placeholder?: string
-    options?: Array<{ label: string, value: string }>
-    min?: number
-    max?: number
-    step?: number
-    unit?: string
-  }
+  const API_BASE = '/api'
 
-  interface ParameterTab {
-    id: string
-    name: string
-    icon: string
-    fields: ParameterField[]
-  }
-
-  defineProps<{
-    activeTab: string
-  }>()
-
-  defineEmits<{
-    'update-tab': [tabId: string]
-  }>()
-
-  const paramTabs = reactive<ParameterTab[]>([
+  const paramTabs = reactive([
     {
       id: 'uplink',
       name: '上行通道',
       icon: '📡',
       fields: [
-        { label: '带宽（MHz）', type: 'number', value: 100, placeholder: '请输入带宽，如100' },
+        { label: '带宽(KHz)', type: 'number', value: 100000, placeholder: '请输入带宽，如100000', key: 'bandwidth' },
         {
-          label: '编码', type: 'select', value: '4/5', options: [
+          label: '编码', type: 'select', value: '4/5', key: 'coding', options: [
             { label: '4/5', value: '4/5' },
             { label: '4/6', value: '4/6' },
             { label: '4/7', value: '4/7' },
             { label: '4/8', value: '4/8' }
           ]
         },
-        { label: '扩频因子', type: 'range', value: 9, min: 6, max: 12, step: 1, unit: 'dB' },
-        { label: '中心频率（GHz）', type: 'number', value: 10, placeholder: '请输入中心频率，如10' },
-        { label: '功率（W）', type: 'number', value: 1, placeholder: '请输入功率，如1' }
+        { label: '扩频因子', type: 'number', value: 9, placeholder: '请输入扩频因子，如9', key: 'spreading_factor' },
+        { label: '中心频率(MHz)', type: 'number', value: 10000, placeholder: '请输入中心频率，如10000', key: 'center_frequency' },
+        { label: '功率(W)', type: 'number', value: 1, placeholder: '请输入功率，如1', key: 'power' }
       ]
     },
     {
       id: 'uplink_interference',
-      name: '上行通道（干扰）',
+      name: '上行通道(干扰)',
       icon: '📡⚡',
       fields: [
-        { label: '带宽（MHz）', type: 'number', value: 100, placeholder: '请输入带宽，如100' },
+        { label: '带宽(KHz)', type: 'number', value: 100000, placeholder: '请输入带宽，如100000', key: 'bandwidth' },
         {
-          label: '编码', type: 'select', value: '4/6', options: [
+          label: '编码', type: 'select', value: '4/6', key: 'coding', options: [
             { label: '4/5', value: '4/5' },
             { label: '4/6', value: '4/6' },
             { label: '4/7', value: '4/7' },
             { label: '4/8', value: '4/8' }
           ]
         },
-        { label: '扩频因子', type: 'range', value: 8, min: 6, max: 12, step: 1, unit: 'dB' },
-        { label: '中心频率（GHz）', type: 'number', value: 10.2, placeholder: '请输入中心频率，如10.2' },
-        { label: '功率（W）', type: 'number', value: 0.5, placeholder: '请输入功率，如0.5' }
+        { label: '扩频因子', type: 'number', value: 8, placeholder: '请输入扩频因子，如8', key: 'spreading_factor' },
+        { label: '中心频率(MHz)', type: 'number', value: 10200, placeholder: '请输入中心频率，如10200', key: 'center_frequency' },
+        { label: '功率(W)', type: 'number', value: 0.5, placeholder: '请输入功率，如0.5', key: 'power' }
       ]
     },
     {
@@ -148,21 +105,86 @@
       name: '下行通道',
       icon: '📶',
       fields: [
-        { label: '带宽（MHz）', type: 'number', value: 100, placeholder: '请输入带宽，如100' },
+        { label: '带宽(KHz)', type: 'number', value: 100000, placeholder: '请输入带宽，如100000', key: 'bandwidth' },
         {
-          label: '编码', type: 'select', value: '4/7', options: [
+          label: '编码', type: 'select', value: '4/7', key: 'coding', options: [
             { label: '4/5', value: '4/5' },
             { label: '4/6', value: '4/6' },
             { label: '4/7', value: '4/7' },
             { label: '4/8', value: '4/8' }
           ]
         },
-        { label: '扩频因子', type: 'range', value: 10, min: 6, max: 12, step: 1, unit: 'dB' },
-        { label: '中心频率（GHz）', type: 'number', value: 12, placeholder: '请输入中心频率，如12' },
-        { label: '功率（W）', type: 'number', value: 2, placeholder: '请输入功率，如2' }
+        { label: '扩频因子', type: 'number', value: 10, placeholder: '请输入扩频因子，如10', key: 'spreading_factor' },
+        { label: '中心频率(MHz)', type: 'number', value: 12000, placeholder: '请输入中心频率，如12000', key: 'center_frequency' },
+        { label: '功率(W)', type: 'number', value: 2, placeholder: '请输入功率，如2', key: 'power' }
       ]
     }
   ])
+
+  // 读取参数
+  const readParameters = async () => {
+    try {
+      const response = await axios.get(`${API_BASE}/parameters`)
+
+      if (response.data.success) {
+        const data = response.data.data
+
+        // 更新每个通道的参数
+        paramTabs.forEach(tab => {
+          const channelData = data[tab.id]
+          if (channelData) {
+            tab.fields.forEach(field => {
+              if (field.key && channelData[field.key] !== undefined) {
+                field.value = channelData[field.key]
+              }
+            })
+          }
+        })
+
+        console.log('参数读取成功:', data)
+        alert('✅ 参数读取成功')
+      } else {
+        throw new Error(response.data.message || '读取失败')
+      }
+    } catch (error) {
+      console.error('读取参数失败:', error)
+      alert(`❌ 参数读取失败: ${error.response?.data?.detail || error.message}`)
+    }
+  }
+
+  // 写入参数
+  const writeParameters = async () => {
+    try {
+      // 构建参数对象
+      const params = {}
+
+      paramTabs.forEach(tab => {
+        params[tab.id] = {}
+        tab.fields.forEach(field => {
+          if (field.key) {
+            params[tab.id][field.key] = field.value
+          }
+        })
+      })
+
+      const response = await axios.post(`${API_BASE}/parameters`, params)
+
+      if (response.data.success) {
+        console.log('参数写入成功:', response.data.data)
+        alert('✅ 参数写入成功')
+      } else {
+        throw new Error(response.data.message || '写入失败')
+      }
+    } catch (error) {
+      console.error('写入参数失败:', error)
+      alert(`❌ 参数写入失败: ${error.response?.data?.detail || error.message}`)
+    }
+  }
+
+  // 组件挂载时自动读取参数
+  onMounted(() => {
+    readParameters()
+  })
 </script>
 
 <style scoped>
@@ -253,6 +275,100 @@
     background: white;
   }
 
+  .channel-card {
+    background: #f8f9fa;
+    border: 2px solid #e9ecef;
+    border-radius: 12px;
+    padding: 25px;
+    margin-bottom: 20px;
+    transition: all 0.3s ease;
+  }
+
+    .channel-card:hover {
+      border-color: #007bff;
+      box-shadow: 0 8px 20px rgba(0, 123, 255, 0.1);
+    }
+
+  .channel-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #e9ecef;
+  }
+
+    .channel-header i {
+      font-size: 24px;
+    }
+
+    .channel-header h3 {
+      margin: 0;
+      color: #2c3e50;
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+  .action-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 15px;
+    margin-top: 25px;
+    padding-top: 20px;
+    border-top: 2px solid #e9ecef;
+  }
+
+  .read-button {
+    padding: 12px 30px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: #17a2b8;
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+    .read-button:hover {
+      background: #138496;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(23, 162, 184, 0.3);
+    }
+
+    .read-button:active {
+      transform: translateY(0);
+    }
+
+  .write-button {
+    padding: 12px 30px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: #28a745;
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+    .write-button:hover {
+      background: #218838;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+    }
+
+    .write-button:active {
+      transform: translateY(0);
+    }
+
+
   .tab-panel {
     animation: fadeIn 0.3s ease;
   }
@@ -313,20 +429,6 @@
     cursor: pointer;
   }
 
-  .slider-container {
-    margin: 10px 0;
-  }
-
-  .slider-label {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-weight: 600;
-    color: #2c3e50;
-    font-size: 14px;
-    margin-bottom: 10px;
-  }
-
   .value {
     background: #e9ecef;
     padding: 4px 8px;
@@ -335,35 +437,6 @@
     color: #007bff;
   }
 
-  .slider {
-    width: 100%;
-    height: 6px;
-    border-radius: 3px;
-    background: #e9ecef;
-    outline: none;
-    appearance: none;
-    margin-bottom: 10px;
-  }
-
-    .slider::-webkit-slider-thumb {
-      appearance: none;
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      background: #007bff;
-      cursor: pointer;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-    }
-
-    .slider::-moz-range-thumb {
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      background: #007bff;
-      cursor: pointer;
-      border: none;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-    }
 
   .range-labels {
     display: flex;

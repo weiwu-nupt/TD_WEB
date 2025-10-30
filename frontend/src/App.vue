@@ -24,8 +24,7 @@
       <AppHeader />
 
       <main class="main-content">
-        <ParameterSettings :active-tab="activeParamTab"
-                           @update-tab="activeParamTab = $event" />
+        <ParameterSettings />
         <SceneSettings />
         <ResultDisplay :active-tab="activeResultTab"
                        @update-tab="activeResultTab = $event" />
@@ -172,7 +171,6 @@
 
   // 初始状态：空字符串表示显示选择界面
   const selectedSystem = ref<string>('')
-  const activeParamTab = ref('uplink')
   const activeResultTab = ref('ber')
 
   // 在虚实融合系统的数据中添加
