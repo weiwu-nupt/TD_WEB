@@ -14,6 +14,90 @@ from collections import deque
 import asyncio
 from typing import Optional
 
+# 帧类型常量
+FRAME_TYPE_BROADCAST = 0x01    # 广播帧
+FRAME_TYPE_TIMESTAMP = 0x02    # 发送时间戳回传帧  
+FRAME_TYPE_LINK_STATUS = 0x03  # 链路状态帧
+
+def process_broadcast_frame(parsed_msg: dict) -> dict:
+    """处理广播帧 0x01"""
+    # TODO: 实现广播帧处理逻辑
+    processed_data = {
+        "frame_name": "广播帧",
+        "processing_result": "广播帧处理完成",
+        "broadcast_info": {
+            "broadcast_id": 1,
+            "target_range": "全网",
+            "priority": "normal"
+        }
+    }
+    return processed_data
+
+def process_timestamp_frame(parsed_msg: dict) -> dict:
+    """处理发送时间戳回传帧 0x02"""
+    # TODO: 实现时间戳回传帧处理逻辑
+    processed_data = {
+        "frame_name": "发送时间戳回传帧",
+        "processing_result": "时间戳回传帧处理完成",
+        "timestamp_info": {
+            "original_timestamp": parsed_msg.get("timestamp1", 0),
+            "return_timestamp": parsed_msg.get("timestamp2", 0),
+            "delay_ms": abs(parsed_msg.get("timestamp2", 0) - parsed_msg.get("timestamp1", 0))
+        }
+    }
+    return processed_data
+
+def process_link_status_frame(parsed_msg: dict) -> dict:
+    """处理链路状态帧 0x03"""
+    # TODO: 实现链路状态帧处理逻辑
+    processed_data = {
+        "frame_name": "链路状态帧",
+        "processing_result": "链路状态帧处理完成",
+        "link_info": {
+            "link_quality": "良好",
+            "signal_strength": -60,
+            "connection_status": "connected"
+        }
+    }
+    return processed_data
+
+def get_frame_type_name(frame_type: int) -> str:
+    """获取帧类型名称"""
+    frame_names = {
+        0x01: "广播帧",
+        0x02: "发送时间戳回传帧", 
+        0x03: "链路状态帧"
+    }
+    return frame_names.get(frame_type, f"未知帧(0x{frame_type:02X})")
+
+def process_frame_by_type(parsed_msg: dict) -> dict:
+    """根据帧类型处理消息"""
+    frame_type = parsed_msg.get("frame_type", 0)
+    
+    try:
+        if frame_type == FRAME_TYPE_BROADCAST:
+            processing_result = process_broadcast_frame(parsed_msg)
+        elif frame_type == FRAME_TYPE_TIMESTAMP:
+            processing_result = process_timestamp_frame(parsed_msg)
+        elif frame_type == FRAME_TYPE_LINK_STATUS:
+            processing_result = process_link_status_frame(parsed_msg)
+        else:
+            processing_result = {
+                "frame_name": f"未知帧(0x{frame_type:02X})",
+                "processing_result": "未知帧类型，跳过处理",
+                "error": "unsupported_frame_type"
+            }
+        
+        return processing_result
+        
+    except Exception as e:
+        logger.error(f"处理帧类型 0x{frame_type:02X} 时发生错误: {e}")
+        return {
+            "frame_name": get_frame_type_name(frame_type),
+            "processing_result": f"处理失败: {str(e)}",
+            "error": "processing_error"
+        }
+
 # 添加消息队列
 message_queue = deque(maxlen=4096)
 
@@ -144,44 +228,49 @@ class UDPReceiver:
             logger.info(f"UDP接收器已停止 (端口: {self.current_port})")
             self.current_port = None
     
-def _receive_loop(self):
-    """UDP接收循环"""
-    while self.running and self.socket:
-        try:
-            data, addr = self.socket.recvfrom(1024)
+    def _receive_loop(self):
+        """UDP接收循环"""
+        while self.running and self.socket:
+            try:
+                data, addr = self.socket.recvfrom(1024)
             
-            # 解析消息帧
-            parsed_msg = parse_message_frame(data)
+                # 解析消息帧
+                parsed_msg = parse_message_frame(data)
             
-            if parsed_msg:
-                # 添加接收信息
-                parsed_msg.update({
-                    "source_ip": addr[0],
-                    "source_port": addr[1],
-                    "dest_port": self.current_port,
-                    "receive_time": datetime.now().isoformat(),
-                    "direction": "receive"
-                })
+                if parsed_msg:
+                    # 处理帧数据
+                    processing_result = process_frame_by_type(parsed_msg)
                 
-                # 添加到消息队列
-                message_queue.append(parsed_msg)
+                    # 添加接收信息和处理结果
+                    parsed_msg.update({
+                        "source_ip": addr[0],
+                        "source_port": addr[1],
+                        "dest_port": self.current_port,
+                        "receive_time": datetime.now().isoformat(),
+                        "direction": "receive",
+                        "processing": processing_result  # 添加处理结果
+                    })
                 
-                logger.info(f"收到结构化消息 [{addr[0]}:{addr[1]}] -> [127.0.0.1:{self.current_port}]: "
-                           f"帧类型={parsed_msg['frame_type']}, "
-                           f"时间戳1={parsed_msg['timestamp1']}ms, "
-                           f"时间戳2={parsed_msg['timestamp2']}ms, "
-                           f"数据长度={parsed_msg['payload_length']}")
-            else:
-                # 原始消息处理（兼容性）
-                message = data.decode('utf-8', errors='ignore')
-                logger.info(f"收到UDP消息 [{addr[0]}:{addr[1]}] -> [127.0.0.1:{self.current_port}]: {message}")
+                    # 添加到消息队列
+                    message_queue.append(parsed_msg)
                 
-        except socket.timeout:
-            continue
-        except Exception as e:
-            if self.running:
-                logger.error(f"UDP接收错误: {e}")
-            break
+                    logger.info(f"收到{parsed_msg['frame_type_name']} [{addr[0]}:{addr[1]}] -> [127.0.0.1:{self.current_port}]: "
+                               f"帧类型=0x{parsed_msg['frame_type']:02X}, "
+                               f"时间戳1={parsed_msg['timestamp1']}ms, "
+                               f"时间戳2={parsed_msg['timestamp2']}ms, "
+                               f"数据长度={parsed_msg['payload_length']}, "
+                               f"处理结果={processing_result['processing_result']}")
+                else:
+                    # 原始消息处理（兼容性）
+                    message = data.decode('utf-8', errors='ignore')
+                    logger.info(f"收到UDP消息 [{addr[0]}:{addr[1]}] -> [127.0.0.1:{self.current_port}]: {message}")
+                
+            except socket.timeout:
+                continue
+            except Exception as e:
+                if self.running:
+                    logger.error(f"UDP接收错误: {e}")
+                break
     
     def get_status(self):
         """获取接收器状态"""
@@ -195,25 +284,22 @@ def _receive_loop(self):
 class UDPSender:
 
     @staticmethod
-    def send_message(message: str, target_ip: str = "127.0.0.1", target_port: int = None):
+    def send_message(message: str, target_ip: str = "127.0.0.1", target_port: int = None, frame_type: int = 0x01):
         """发送UDP消息"""
         try:
             if target_port is None:
                 target_port = current_config["receivePort"]
-        
-            # 创建标准帧格式的测试消息
-            frame_type = 0x01  # 测试帧类型
-        
+    
             # 当前时间戳（秒+毫秒）
             import time
             current_time = time.time()
             seconds = int(current_time) & 0xFFFF  # 取低16位
             milliseconds = int((current_time % 1) * 1000) & 0xFFFF
-        
+    
             # 第二个时间戳（稍微延后1ms）
             seconds2 = seconds
             milliseconds2 = (milliseconds + 1) & 0xFFFF
-        
+    
             # 构建帧数据
             frame_data = struct.pack('>BHHHH', 
                                     frame_type,      # 帧类型 1字节
@@ -221,31 +307,23 @@ class UDPSender:
                                     milliseconds,    # 时间戳1毫秒 2字节
                                     seconds2,        # 时间戳2秒 2字节
                                     milliseconds2)   # 时间戳2毫秒 2字节
-        
+    
             # 添加消息内容作为payload
             payload = message.encode('utf-8')
             full_message = frame_data + payload
-        
+    
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
                 sock.bind(('127.0.0.1', 0))
                 local_port = sock.getsockname()[1]
-            
+        
                 sock.sendto(full_message, (target_ip, target_port))
-                logger.info(f"发送标准帧UDP消息 [127.0.0.1:{local_port}] -> [{target_ip}:{target_port}]: "
-                           f"帧类型={frame_type}, 载荷长度={len(payload)}")
-            
+                logger.info(f"发送{get_frame_type_name(frame_type)}UDP消息 [127.0.0.1:{local_port}] -> [{target_ip}:{target_port}]: "
+                           f"帧类型=0x{frame_type:02X}, 载荷长度={len(payload)}")
+        
                 return True, local_port, target_port
         except Exception as e:
             logger.error(f"发送UDP消息失败: {e}")
             return False, None, None
-
-    def get_status(self):
-        """获取接收器状态"""
-        return {
-            "running": self.running,
-            "port": self.current_port,
-            "thread_alive": self.thread.is_alive() if self.thread else False
-    }
 
 # 全局实例
 udp_receiver = UDPReceiver()
@@ -379,6 +457,39 @@ async def clear_messages():
         }
     except Exception as e:
         logger.error(f"清空消息队列失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/udp/frame-stats")
+async def get_frame_stats():
+    """获取帧类型统计"""
+    try:
+        stats = {
+            "total_frames": len(message_queue),
+            "frame_types": {},
+            "recent_activity": []
+        }
+        
+        # 统计帧类型
+        for msg in message_queue:
+            frame_type = msg.get("frame_type", 0)
+            frame_name = msg.get("frame_type_name", "未知")
+            
+            if frame_name not in stats["frame_types"]:
+                stats["frame_types"][frame_name] = {
+                    "count": 0,
+                    "type_code": f"0x{frame_type:02X}",
+                    "last_seen": None
+                }
+            
+            stats["frame_types"][frame_name]["count"] += 1
+            stats["frame_types"][frame_name]["last_seen"] = msg.get("receive_time")
+        
+        return {
+            "success": True,
+            "data": stats
+        }
+    except Exception as e:
+        logger.error(f"获取帧统计失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

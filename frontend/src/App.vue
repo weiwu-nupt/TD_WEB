@@ -62,14 +62,6 @@
               <div class="udp-form">
                 <div class="form-row">
                   <div class="form-group">
-                    <label>发送UDP端口</label>
-                    <input type="number"
-                           v-model.number="udpSettings.sendPort"
-                           placeholder="8001"
-                           class="udp-input"
-                           :disabled="updating" />
-                  </div>
-                  <div class="form-group">
                     <label>接收UDP端口</label>
                     <input type="number"
                            v-model.number="udpSettings.receivePort"
@@ -83,7 +75,7 @@
                   <button class="update-button"
                           @click="updateUDPConfig"
                           :disabled="updating">
-                    {{ updating ? '更新中...' : '🔄 更新配置' }}
+                    {{ updating ? '更新中...' : '🔄 更新' }}
                   </button>
                   <button class="test-button"
                           @click="testUDPSend"
@@ -183,10 +175,13 @@
   const activeParamTab = ref('uplink')
   const activeResultTab = ref('ber')
 
+  // 在虚实融合系统的数据中添加
+  const messages = ref([])
+  const messagePolling = ref(null)
+
   // UDP设置
   const udpSettings = reactive({
-    sendPort: 8001,
-    receivePort: 8002
+    receivePort: 8002  // 删除了 sendPort
   })
 
   // UDP状态
@@ -236,21 +231,18 @@
 
     try {
       const response = await axios.post(`${API_BASE}/udp/config`, {
-        sendPort: udpSettings.sendPort,
         receivePort: udpSettings.receivePort
       })
 
       if (response.data.success) {
+        // 直接从POST响应中获取状态，不依赖GET请求
         udpStatus.connected = true
-        showStatus(`UDP配置更新成功 - 发送端口: ${udpSettings.sendPort}, 接收端口: ${udpSettings.receivePort}`, 'success')
+        showStatus(`UDP配置更新成功 - 接收端口: ${udpSettings.receivePort}`, 'success')
         console.log('UDP配置更新成功:', response.data)
-
-        // 刷新状态
-        await refreshStatus()
       } else {
         throw new Error(response.data.message || '配置更新失败')
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('UDP配置更新失败:', error)
       udpStatus.connected = false
       showStatus(`配置更新失败: ${error.response?.data?.detail || error.message}`, 'error')
@@ -277,55 +269,31 @@
         if (details) {
           addEvent('发', details.from, details.to, details.data)
         } else {
-          // 兜底方案，使用旧的显示方式
-          addEvent('发', `127.0.0.1:临时端口`, `127.0.0.1:${udpSettings.receivePort}`, testMessage)
+          // 兜底方案，不显示随机端口
+          addEvent('发', `127.0.0.1`, `127.0.0.1:${udpSettings.receivePort}`, testMessage)
         }
       } else {
         throw new Error(response.data.message || '发送失败')
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('UDP发送测试失败:', error)
       showStatus(`测试发送失败: ${error.response?.data?.detail || error.message}`, 'error')
     }
   }
 
   // 刷新UDP状态
-  const refreshStatus = async () => {
-    try {
-      const response = await axios.get(`${API_BASE}/udp/status`)
-
-      if (response.data.success) {
-        const data = response.data.data
-
-        // 更新配置显示
-        udpSettings.sendPort = data.config.sendPort
-        udpSettings.receivePort = data.config.receivePort
-
-        // 更新连接状态
-        udpStatus.connected = data.receiver.running
-
-        console.log('UDP状态刷新:', data)
-      }
-    } catch (error: any) {
-      console.error('刷新UDP状态失败:', error)
-      udpStatus.connected = false
-    }
-  }
-
-  // 获取初始配置
   const loadInitialConfig = async () => {
     try {
       const response = await axios.get(`${API_BASE}/udp/config`)
 
       if (response.data.success) {
         const config = response.data.data
-        udpSettings.sendPort = config.sendPort
-        udpSettings.receivePort = config.receivePort
+        udpSettings.receivePort = config.receivePort  
         udpStatus.connected = response.data.receiver_status.running
 
         console.log('初始UDP配置加载:', config)
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('加载初始配置失败:', error)
       showStatus('无法连接到后端服务', 'error')
     }
@@ -396,13 +364,21 @@
   }
 
   // 监听系统切换
-  const handleSystemChange = (system: string) => {
+  const handleSystemChange = (system) => {
     if (system === 'mixed') {
       startStatusPolling()
+      startMessagePolling() // 添加这行
     } else {
       stopStatusPolling()
+      stopMessagePolling() // 添加这行
     }
   }
+
+  // 在 onUnmounted 中添加清理
+  onUnmounted(() => {
+    stopStatusPolling()
+    stopMessagePolling() // 添加这行
+  })
 
   // 监听选择的系统变化
   import { watch } from 'vue'
@@ -414,6 +390,45 @@
   onUnmounted(() => {
     stopStatusPolling()
   })
+
+  // 获取消息
+  const fetchMessages = async () => {
+    try {
+      const response = await axios.get(`${API_BASE}/udp/messages?limit=100`)
+      if (response.data.success) {
+        messages.value = response.data.data.messages
+      }
+    } catch (error) {
+      console.error('获取消息失败:', error)
+    }
+  }
+
+  // 开始消息轮询
+  const startMessagePolling = () => {
+    if (messagePolling.value) return
+
+    messagePolling.value = setInterval(fetchMessages, 1000) // 每秒获取一次
+  }
+
+  // 停止消息轮询
+  const stopMessagePolling = () => {
+    if (messagePolling.value) {
+      clearInterval(messagePolling.value)
+      messagePolling.value = null
+    }
+  }
+
+  // 清空消息
+  const clearMessages = async () => {
+    try {
+      await axios.delete(`${API_BASE}/udp/messages`)
+      messages.value = []
+      showStatus('消息队列已清空', 'info')
+    } catch (error) {
+      console.error('清空消息失败:', error)
+      showStatus('清空消息失败', 'error')
+    }
+  }
 
   console.log('App.vue 已加载，selectedSystem 初始值:', selectedSystem.value)
 </script>
@@ -641,22 +656,25 @@
 
   .update-button,
   .test-button {
-    padding: 0.75rem 1.5rem;
+    padding: 0.5rem 1rem; /* 减少padding */
     border: none;
     border-radius: 0.5rem;
-    font-size: 1rem;
+    font-size: 0.9rem; /* 减小字体 */
     font-weight: 500;
     cursor: pointer;
     transition: all 0.3s ease;
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    white-space: nowrap; /* 防止换行 */
   }
 
   .update-button {
     background: rgba(0, 123, 255, 0.8);
     color: white;
     flex: 1;
+    min-width: 120px; /* 设置最小宽度 */
+    max-width: 140px; /* 设置最大宽度 */
   }
 
     .update-button:hover:not(:disabled) {
