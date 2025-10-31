@@ -3,7 +3,7 @@
 from fastapi import APIRouter, HTTPException
 import logging
 from  models import UDPConfig, UDPMessage
-from config import CONFIG
+from config import CONFIG, current_config
 from udp_receiver import get_message_queue
 
 logger = logging.getLogger(__name__)
@@ -34,7 +34,7 @@ async def update_udp_config(config: UDPConfig):
     """更新UDP端口配置"""
     try:
         # 更新全局配置
-        current_config["receivePort"] = config.receivePort
+        CONFIG["udp_receive_port"] = config.receivePort
         
         # 重启接收器到新端口
         success = udp_receiver.start(config.receivePort)
@@ -44,7 +44,7 @@ async def update_udp_config(config: UDPConfig):
             return {
                 "success": True, 
                 "message": f"UDP接收端口配置成功: {config.receivePort}",
-                "data": current_config
+                "data": CONFIG["udp_receive_port"]
             }
         else:
             raise HTTPException(status_code=500, detail="UDP接收器启动失败")

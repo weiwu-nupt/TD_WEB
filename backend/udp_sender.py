@@ -21,7 +21,7 @@ class UDPSender:
         """发送UDP消息"""
         try:
             if target_port is None:
-                target_port = current_config["receivePort"]
+                target_port = CONFIG["udp_receive_port"]
             
             # 构建消息内容
             message_content = message.encode('utf-8')
@@ -87,7 +87,7 @@ class UDPSender:
         """发送LoRa消息帧"""
         try:
             if target_port is None:
-                target_port = current_config["receivePort"]
+                target_port = CONFIG["udp_receive_port"]
             
             # 构建消息内容: timing_enable(1) + timing_time(4) + data_content(n)
             message_content = struct.pack('B', timing_enable)

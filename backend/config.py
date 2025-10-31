@@ -25,6 +25,10 @@ def load_config():
 # 全局配置
 CONFIG = load_config()
 
+current_config = {
+    "receivePort": CONFIG["udp_receive_port"]
+}
+
 # 帧类型常量
 FRAME_TYPE_BROADCAST = 0x01      # 广播帧
 FRAME_TYPE_TIMESTAMP = 0x02      # 发送时间戳回传帧  
