@@ -182,9 +182,9 @@
   }
 
   // 组件挂载时自动读取参数
-  onMounted(() => {
-    readParameters()
-  })
+  //onMounted(() => {
+  //  readParameters()
+  //})
 </script>
 
 <style scoped>
