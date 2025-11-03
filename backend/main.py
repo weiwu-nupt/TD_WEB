@@ -18,7 +18,8 @@ from udp_receiver import UDPReceiver
 from udp_sender import UDPSender
 
 # 导入API路由
-from api import udp_routes, parameter_routes, doppler_routes, fpga_lora_routes
+from api import udp_routes, parameter_routes, doppler_routes, lora_routes
+
 
 # 创建全局实例
 udp_receiver = UDPReceiver()
@@ -35,8 +36,8 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 60)
     
     # 启动默认接收端口
-    success = udp_receiver.start(CONFIG["udp_receive_port"])
-    
+    success = udp_receiver.start(CONFIG["local_ip"], CONFIG["udp_receive_port"])
+
     if success:
         logger.info("✓ UDP接收服务启动成功")
     else:
@@ -76,13 +77,13 @@ app.add_middleware(
 udp_routes.init_udp_objects(udp_receiver, udp_sender)
 parameter_routes.init_sender(udp_sender)
 doppler_routes.init_sender(udp_sender)
-fpga_lora_routes.init_sender(udp_sender)
+lora_routes.init_sender(udp_sender)
 
 # 注册路由
 app.include_router(udp_routes.router)
 app.include_router(parameter_routes.router)
 app.include_router(doppler_routes.router)
-app.include_router(fpga_lora_routes.router)
+app.include_router(lora_routes.router)
 
 # 根路由
 @app.get("/")
@@ -97,7 +98,7 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
         app, 
-        host="127.0.0.1", 
+        host=CONFIG["local_ip"], 
         port=CONFIG["backend_port"], 
         log_level="info"
     )

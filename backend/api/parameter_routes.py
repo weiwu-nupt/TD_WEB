@@ -4,15 +4,90 @@ from fastapi import APIRouter, HTTPException
 import logging
 
 from models import AllChannelParameters
-from config import current_parameters
+from config import CONFIG, current_parameters
 from response_waiter import ResponseWaiter
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["Parameters"])
 
-# 这个对象会在main.py中注入
 udp_sender = None
+
+def init_sender(sender):
+    """初始化发送器引用"""
+    global udp_sender
+    udp_sender = sender
+
+# 带宽映射
+BANDWIDTH_MAP = {
+    125: 0,
+    250: 1,
+    500: 2
+}
+
+# 编码映射
+CODING_MAP = {
+    '4/5': 0b001,
+    '4/6': 0b010,
+    '4/7': 0b011,
+    '4/8': 0b100
+}
+
+def build_uplink_registers(bandwidth: int, sf: int, coding: str):
+    """构建上行/上行干扰的两个寄存器值"""
+    bw = BANDWIDTH_MAP.get(bandwidth, 0)
+    base_sf = sf
+    coding_rate = CODING_MAP.get(coding, 0b001)
+    
+    # 第一个寄存器 (0x20/0x60)
+    reg1 = (
+        (0 << 0) |           # bit 0: 保留
+        (0 << 1) |           # bit 1: 信号格式(0-传统)
+        (bw << 2) |          # bit 3:2: 信号带宽
+        (0 << 4) |           # bit 4: 头模式允许
+        (0 << 5) |           # bit 5: 低速率
+        (0 << 6) |           # bit 6: 交织模式
+        (0 << 7) |           # bit 7: 保留
+        (1 << 8) |           # bit 15:8: down-chirp数目(1)
+        (8 << 16)            # bit 31:16: 前导码长度(8)
+    )
+    
+    # 第二个寄存器 (0x28/0x68)
+    reg2 = (
+        (0 << 0) |           # bit 0: 头数据使能
+        (0 << 1) |           # bit 1: 传统lora
+        (0 << 2) |           # bit 2: FPGA编码使能
+        (0 << 3) |           # bit 3: 数据白化使能
+        (base_sf << 4) |     # bit 7:4: 基础SF
+        (0 << 8) |           # bit 11:8: 自适应SF
+        (0 << 12) |          # bit 16:12: 头数据CRC
+        (0 << 17) |          # bit 19:17: SF使能(000-固定SF)
+        (1 << 20) |          # bit 20: CRC使能
+        (coding_rate << 21)  # bit 23:21: 编码速率
+    )
+    
+    return reg1, reg2
+
+def build_downlink_register(bandwidth: int, sf: int, coding: str):
+    """构建下行通道的寄存器值"""
+    bw = BANDWIDTH_MAP.get(bandwidth, 0)
+    coding_rate = 0 if coding == '4/5' else 1  # 下行只有4/5(0)和4/6(1)
+    
+    reg = (
+        (1 << 0) |           # bit 0: 接收使能(固定为1)
+        (0 << 1) |           # bit 1: 信号格式(0-传统)
+        (bw << 2) |          # bit 3:2: 信号带宽
+        (sf << 4) |          # bit 7:4: 扩频因子
+        (coding_rate << 8) | # bit 9:8: 信号编码
+        (0 << 10) |          # bit 10: 数据CRC使能
+        (0 << 11) |          # bit 11: 低速模式
+        (0 << 12) |          # bit 12: 头模式使能
+        (0 << 13) |          # bit 13: 连续接收使能
+        (0 << 14) |          # bit 14: FPGA译码使能
+        (0 << 15)            # bit 15: 数据白化使能
+    )
+    
+    return reg
 
 def init_sender(sender):
     """初始化发送器引用"""
@@ -54,17 +129,6 @@ async def get_parameters():
                     logger.error(f"发送FPGA读取命令失败: {channel}[{i}]")
                     continue
                 
-                # 等待FPGA响应
-                response = await ResponseWaiter.wait_for_response(request_id, timeout=2)
-                
-                if response:                 
-                    read_success += 1
-        
-        # 如果成功读取大部分参数
-        if read_success >= 9:  # 至少读取60%
-            logger.info("通道参数读取成功")
-        else:
-            logger.warning("读取通道参数超时")
         
     except Exception as e:
         logger.error(f"读取参数失败: {e}")
@@ -75,88 +139,58 @@ async def write_parameters(params: AllChannelParameters):
     """写入所有通道参数 - 通过FPGA写入"""
     try:
         logger.info("开始写入通道参数...")
+        # 收集所有写操作
+        batch_operations = []
         
-        # 编码映射
-        def coding_to_value(coding: str) -> int:
-            return int(coding.split('/')[1]) - 5
+        # 1. 上行通道 (地址: 0x20, 0x28)
+        reg1, reg2 = build_uplink_registers(
+            params.uplink.bandwidth,
+            params.uplink.spreading_factor,
+            params.uplink.coding
+        )
+        batch_operations.append((0x20, reg1))
+        batch_operations.append((0x28, reg2))
         
-        # 构建写入列表
-        write_list = []
+        # 2. 上行通道(干扰) (地址: 0x60, 0x68)
+        reg1, reg2 = build_uplink_registers(
+            params.uplink_interference.bandwidth,
+            params.uplink_interference.spreading_factor,
+            params.uplink_interference.coding
+        )
+        batch_operations.append((0x60, reg1))
+        batch_operations.append((0x68, reg2))
         
-        # 上行通道
-        write_list.extend([
-            (0x2000, params.uplink.bandwidth),
-            (0x2001, coding_to_value(params.uplink.coding)),
-            (0x2002, params.uplink.spreading_factor),
-            (0x2003, params.uplink.center_frequency),
-            (0x2004, int(params.uplink.power * 100))
-        ])
+        # 3. 下行通道 (地址: 0x40)
+        reg = build_downlink_register(
+            params.downlink.bandwidth,
+            params.downlink.spreading_factor,
+            params.downlink.coding
+        )
+        batch_operations.append((0x40, reg))
         
-        # 上行干扰
-        write_list.extend([
-            (0x2010, params.uplink_interference.bandwidth),
-            (0x2011, coding_to_value(params.uplink_interference.coding)),
-            (0x2012, params.uplink_interference.spreading_factor),
-            (0x2013, params.uplink_interference.center_frequency),
-            (0x2014, int(params.uplink_interference.power * 100))
-        ])
+        # 使用 send_fpga_operation 批量写入
+        success = udp_sender.send_fpga_operation(
+            operation_type=1,  # 写操作
+            batch_operations=batch_operations,
+            target_ip=CONFIG["arm_ip"],
+            target_port =CONFIG["arm_port"]
+        )
+        if not success:
+            raise HTTPException(status_code=500, detail="FPGA写入失败")
         
-        # 下行通道
-        write_list.extend([
-            (0x2020, params.downlink.bandwidth),
-            (0x2021, coding_to_value(params.downlink.coding)),
-            (0x2022, params.downlink.spreading_factor),
-            (0x2023, params.downlink.center_frequency),
-            (0x2024, int(params.downlink.power * 100))
-        ])
+        # 更新本地缓存
+        current_parameters["uplink"] = params.uplink.dict()
+        current_parameters["uplink_interference"] = params.uplink_interference.dict()
+        current_parameters["downlink"] = params.downlink.dict()
         
-        # # 写入计数
-        # success_count = 0
+        return {
+            "success": True,
+            "data": current_parameters,
+            "message": "通道参数写入成功",
+        }
         
-        # 依次写入
-        for address, value in write_list:
-        #     request_id = ResponseWaiter.create_request("fpga_write")
-            
-            success, _, _ = udp_sender.send_fpga_operation(
-                operation_type=1,
-                address=address,
-                data=value,
-                target_ip="127.0.0.1"
-            )
-            
-        #     if not success:
-        #         logger.error(f"发送FPGA写入命令失败: 地址=0x{address:08X}")
-        #         continue
-            
-        #     response = await ResponseWaiter.wait_for_response(request_id, timeout=2)
-            
-        #     if response:
-        #         success_count += 1
-        #         logger.info(f"写入参数成功: 地址=0x{address:08X}, 值={value}")
-        #     else:
-        #         logger.warning(f"写入参数超时: 地址=0x{address:08X}")
-        
-        # # 如果大部分参数写入成功
-        # if success_count >= 9:
-        #     # 更新本地缓存
-        #     current_parameters["uplink"] = params.uplink.dict()
-        #     current_parameters["uplink_interference"] = params.uplink_interference.dict()
-        #     current_parameters["downlink"] = params.downlink.dict()
-            
-        #     logger.info("通道参数写入成功")
-            
-        #     return {
-        #         "success": True,
-        #         "data": current_parameters,
-        #         "message": f"参数写入成功 ({success_count}/15)"
-        #     }
-        # else:
-        #     return {
-        #         "success": False,
-        #         "message": f"写入失败，仅成功 {success_count}/15 个参数",
-        #         "data": params.dict()
-        #     }
-        
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"写入参数失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))

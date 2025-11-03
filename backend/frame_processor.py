@@ -138,56 +138,28 @@ def process_lora_frame(parsed_msg: dict, addr: tuple) -> dict:
     try:
         message_content = parsed_msg.get("message_content", b"")
         
-        if len(message_content) < 1:
+        if len(message_content) < 9:
             raise ValueError("LoRa数据长度不足")
         
-        # 判断是发送帧还是接收帧
-        if len(message_content) >= 5 and message_content[0] <= 1:
-            # LoRa发送帧
-            timing_enable = message_content[0]
-            timing_time = struct.unpack('>I', message_content[1:5])[0]
-            data_content = message_content[5:].decode('utf-8', errors='ignore')
+        # receive_timestamp(4) + complete_timestamp(4) + frame_count(1) + data(n)
             
-            processed_data = {
-                "frame_name": "LoRa发送帧",
-                "processing_result": "LoRa发送帧处理完成",
-                "source_ip": addr[0],
-                "source_port": addr[1],
-                "lora_send_info": {
-                    "timing_enable": timing_enable,
-                    "timing_enabled": timing_enable == 1,
-                    "timing_time": timing_time,
-                    "timing_time_ms": timing_time,
-                    "data_content": data_content,
-                    "content_length": len(data_content),
-                    "data_hex": message_content[5:].hex()
-                }
+        receive_timestamp = struct.unpack('>I', message_content[0:4])[0]
+        complete_timestamp = struct.unpack('>I', message_content[4:8])[0]
+        frame_count = message_content[9]  # 帧计数
+        data_bytes = message_content[9:]
+        data_hex = data_bytes.hex().upper()
+            
+        duration = complete_timestamp - receive_timestamp
+            
+        processed_data = {
+            "frame_name": "LoRa接收帧",
+            "lora_receive_info": {
+                "frame_count": frame_count,
+                "duration_ms": duration,
+                "data_content": data_hex,
+                "content_length": len(data_bytes)
             }
-        else:
-            # LoRa接收帧
-            if len(message_content) < 8:
-                raise ValueError("LoRa接收帧数据长度不足")
-            
-            receive_timestamp = struct.unpack('>I', message_content[0:4])[0]
-            complete_timestamp = struct.unpack('>I', message_content[4:8])[0]
-            data_content = message_content[8:].decode('utf-8', errors='ignore')
-            
-            duration = complete_timestamp - receive_timestamp
-            
-            processed_data = {
-                "frame_name": "LoRa接收帧",
-                "processing_result": "LoRa接收帧处理完成",
-                "source_ip": addr[0],
-                "source_port": addr[1],
-                "lora_receive_info": {
-                    "receive_timestamp": receive_timestamp,
-                    "complete_timestamp": complete_timestamp,
-                    "duration_ms": duration,
-                    "data_content": data_content,
-                    "content_length": len(data_content),
-                    "data_hex": message_content[8:].hex()
-                }
-            }
+        }
         
         return processed_data
         

@@ -16,11 +16,9 @@ class UDPMessage(BaseModel):
 # 通道参数模型
 class ChannelParameters(BaseModel):
     """通道参数模型"""
-    bandwidth: int          # 带宽(KHz)
-    coding: str             # 编码
-    spreading_factor: int   # 扩频因子
-    center_frequency: int   # 中心频率(MHz)
-    power: float            # 功率(W)
+    bandwidth: int              # 带宽(125/250/500 kHz)
+    coding: str                 # 编码(4/5, 4/6, 4/7, 4/8)
+    spreading_factor: int       # 扩频因子(6-12)
 
 class AllChannelParameters(BaseModel):
     """所有通道参数"""

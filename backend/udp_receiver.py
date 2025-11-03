@@ -24,7 +24,7 @@ class UDPReceiver:
         self.running = False
         self.current_port = None
         
-    def start(self, port: int):
+    def start(self, local_ip: str, port: int):
         """启动UDP接收"""
         # 如果已经在运行，先停止
         if self.running:
@@ -34,7 +34,7 @@ class UDPReceiver:
             # 创建UDP socket
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self.socket.bind(('127.0.0.1', port))
+            self.socket.bind(local_ip, port)
             self.socket.settimeout(1.0)  # 1秒超时
             
             self.running = True
@@ -96,15 +96,10 @@ class UDPReceiver:
                 # result["direction"] = "receive"
                 
                 # 添加到消息队列
-                # message_queue.append(result)
+                message_queue.append(result)
                 
                 # 通知等待的请求
-                ResponseWaiter.notify_response(result["message_type"], result)
-                
-                logger.info(f"收到{result['frame_name']} [{addr[0]}:{addr[1]}] -> [127.0.0.1:{self.current_port}]: "
-                           f"类型=0x{result['message_type']:02X}, "
-                           f"长度={result['message_length']}, "
-                           f"处理={result['processing_result']}")
+                # ResponseWaiter.notify_response(result["message_type"], result)
                 
             except socket.timeout:
                 continue

@@ -16,10 +16,12 @@ def load_config():
     except FileNotFoundError:
         logger.warning("配置文件未找到,使用默认配置")
         return {
+            "local_ip": "192.168.1.116",
             "backend_port": 8000,
             "udp_receive_port": 8002,
             "vue_dev_port": 5555,
-           "arm_port":8003
+            "arm_ip": "192.168.1.10",
+            "arm_port":8003
         }
 
 # 全局配置

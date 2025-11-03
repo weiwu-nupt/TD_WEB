@@ -4,13 +4,13 @@
       <i class="header-icon">📈</i>
       <h2>测试结果</h2>
       <div class="result-controls">
-        <button class="export-btn" @click="exportResults">
-          <i>📊</i>
-          导出结果
-        </button>
-        <button class="refresh-btn" @click="refreshResults">
+        <div class="connection-status" :class="{ connected: sseConnected }">
+          <span class="status-dot"></span>
+          <span>{{ sseConnected ? 'SSE已连接' : 'SSE未连接' }}</span>
+        </div>
+        <button class="refresh-btn" @click="reconnectSSE">
           <i>🔄</i>
-          刷新数据
+          重新连接
         </button>
       </div>
     </div>
@@ -32,290 +32,372 @@
              :key="tab.id"
              v-show="activeTab === tab.id"
              class="tab-panel">
-          <div class="result-summary">
-            <div class="summary-card">
-              <div class="summary-title">总体状态</div>
-              <div class="summary-value good">正常</div>
-            </div>
-            <div class="summary-card">
-              <div class="summary-title">测试时长</div>
-              <div class="summary-value">{{ testDuration }}s</div>
-            </div>
-            <div class="summary-card">
-              <div class="summary-title">数据包数</div>
-              <div class="summary-value">{{ totalPackets.toLocaleString() }}</div>
-            </div>
-            <div class="summary-card">
-              <div class="summary-title">当前状态</div>
-              <div class="summary-value">
-                <span class="status-dot good"></span>
-                {{ tab.name }}测试
-              </div>
-            </div>
-          </div>
 
           <div class="result-sections">
             <!-- 误码率指标 -->
             <div v-if="tab.id === 'ber'" class="result-section">
+
+              <!-- 文件读取和发送区域 -->
+              <div class="file-sender-section">
+                <div class="file-sender-header">
+                  <i>📡</i>
+                  <span>LoRa数据发送</span>
+                </div>
+                <div class="file-sender-content">
+                  <div class="file-input-group">
+                    <input type="file"
+                           ref="fileInput"
+                           @change="handleFileSelect"
+                           accept=".txt"
+                           class="file-input"
+                           id="txtFileInput" />
+                    <label for="txtFileInput" class="file-label">
+                      <i>📂</i>
+                      <span>{{ selectedFileName || '选择16进制TXT文件' }}</span>
+                    </label>
+                    <button class="send-lora-btn"
+                            @click="sendLoraData"
+                            :disabled="!fileHexData || !sseConnected">
+                      <i>📤</i>
+                      发送LoRa
+                    </button>
+                  </div>
+
+                  <!-- 文件内容预览 -->
+                  <div v-if="fileHexData" class="file-preview">
+                    <div class="preview-header">
+                      <span>数据预览 (16进制)</span>
+                      <span class="data-length">{{ fileHexData.length / 2 }} 字节</span>
+                    </div>
+                    <div class="preview-content">
+                      {{ formatHexPreview(fileHexData) }}
+                    </div>
+                  </div>
+
+                  <!-- 发送状态 -->
+                  <div v-if="sendStatus" class="send-status" :class="sendStatus.type">
+                    <i>{{ sendStatus.type === 'success' ? '✅' : '❌' }}</i>
+                    {{ sendStatus.message }}
+                  </div>
+                </div>
+              </div>
+
+              <!-- 接收数据显示 -->
+              <div class="receive-section">
+                <div class="receive-header">
+                  <i>📥</i>
+                  <span>接收数据</span>
+                  <button class="clear-receive-btn" @click="clearReceivedData">
+                    <i>🗑️</i>
+                    清空
+                  </button>
+                </div>
+                <div class="receive-list">
+                  <div v-for="msg in receivedMessages"
+                       :key="msg.id"
+                       class="receive-item"
+                       :class="{
+             'frame-lost': msg.isLost,
+             'frame-error': msg.hasError
+           }">
+                    <div class="receive-time">{{ msg.time }}</div>
+                    <div class="receive-frame">
+                      帧 #{{ msg.frame_count }}
+                      <span v-if="msg.isLost" class="lost-badge">丢失</span>
+                      <span v-else-if="msg.hasError" class="error-badge">有错</span>
+                      <span v-else class="correct-badge">正确</span>
+                    </div>
+                    <div class="receive-data">
+                      <span class="data-label">数据:</span>
+                      <span class="data-hex">{{ msg.data_hex }}</span>
+                    </div>
+                    <div class="receive-stats">
+                      <span>{{ msg.data_bytes }} 字节</span>
+                      <span v-if="!msg.isLost">{{ msg.duration_ms }} ms</span>
+                    </div>
+                  </div>
+
+                  <div v-if="receivedMessages.length === 0" class="empty-receive">
+                    <i>📭</i>
+                    <p>暂无接收数据</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 误码率统计 - 更新卡片 -->
               <div class="section-title">
                 <i>🎯</i>
-                <span>误码率指标</span>
+                <span>误码率统计</span>
               </div>
               <div class="result-grid">
+                <!-- 1. 总帧数 -->
                 <div class="result-card normal">
                   <div class="card-header">
-                    <div class="card-title">实时误码率</div>
-                    <div class="trend-indicator">📈</div>
+                    <div class="card-title">总帧数</div>
+                    <div class="trend-indicator">📊</div>
                   </div>
                   <div class="card-content">
                     <div class="value-display">
-                      <span class="value">1.2e-5</span>
+                      <span class="value">{{ berStats.totalFrames }}</span>
+                      <span class="unit">帧</span>
                     </div>
-                    <div class="description">当前实时误码率BER</div>
+                    <div class="description">从帧1到帧{{ berStats.totalFrames }}</div>
                   </div>
                 </div>
+
+                <!-- 2. 正确帧数 -->
                 <div class="result-card normal">
                   <div class="card-header">
-                    <div class="card-title">平均误码率</div>
-                    <div class="trend-indicator">📉</div>
+                    <div class="card-title">正确帧数</div>
+                    <div class="trend-indicator">✅</div>
                   </div>
                   <div class="card-content">
                     <div class="value-display">
-                      <span class="value">8.7e-6</span>
+                      <span class="value">{{ berStats.correctFrames }}</span>
+                      <span class="unit">帧</span>
                     </div>
-                    <div class="description">测试周期内平均误码率</div>
+                    <div class="description">完全正确的帧(无比特错误)</div>
                   </div>
                 </div>
-                <div class="result-card warning">
+
+                <!-- 3. 错误帧数 -->
+                <div class="result-card" :class="berStats.errorFrames > 0 ? 'warning' : 'normal'">
                   <div class="card-header">
-                    <div class="card-title">峰值误码率</div>
-                    <div class="trend-indicator">📈</div>
+                    <div class="card-title">错误帧数</div>
+                    <div class="trend-indicator">⚠️</div>
                   </div>
                   <div class="card-content">
                     <div class="value-display">
-                      <span class="value">3.4e-4</span>
+                      <span class="value">{{ berStats.errorFrames }}</span>
+                      <span class="unit">帧</span>
                     </div>
-                    <div class="description">测试周期内峰值误码率</div>
+                    <div class="description">有比特错误的帧(≥1bit错)</div>
                   </div>
                 </div>
-                <div class="result-card normal">
+
+                <!-- 4. 丢失帧数 -->
+                <div class="result-card" :class="berStats.lostFrames > 0 ? 'warning' : 'normal'">
                   <div class="card-header">
-                    <div class="card-title">错误比特数</div>
-                    <div class="trend-indicator">➡️</div>
+                    <div class="card-title">丢失帧数</div>
+                    <div class="trend-indicator">❌</div>
                   </div>
                   <div class="card-content">
                     <div class="value-display">
-                      <span class="value">1,247</span>
-                      <span class="unit">bits</span>
+                      <span class="value">{{ berStats.lostFrames }}</span>
+                      <span class="unit">帧</span>
                     </div>
-                    <div class="description">累计检测到的错误比特数量</div>
+                    <div class="description">帧号不连续的丢失帧</div>
                   </div>
                 </div>
-                <div class="result-card normal">
+
+                <!-- 5. 误帧率 (FER) -->
+                <div class="result-card" :class="berStats.fer > 0.01 ? 'error' : berStats.fer > 0 ? 'warning' : 'normal'">
                   <div class="card-header">
-                    <div class="card-title">总比特数</div>
-                    <div class="trend-indicator">📈</div>
+                    <div class="card-title">误帧率 (FER)</div>
+                    <div class="trend-indicator">📊</div>
                   </div>
                   <div class="card-content">
                     <div class="value-display">
-                      <span class="value">143M</span>
-                      <span class="unit">bits</span>
+                      <span class="value">{{ (berStats.fer * 100).toFixed(2) }}</span>
+                      <span class="unit">%</span>
                     </div>
-                    <div class="description">测试传输的总比特数量</div>
+                    <div class="description">(错误帧 + 丢失帧) / 总帧数</div>
                   </div>
                 </div>
-                <div class="result-card normal">
+
+                <!-- 6. 误比特率 (BER) -->
+                <div class="result-card" :class="berStats.ber > 1e-4 ? 'error' : berStats.ber > 1e-6 ? 'warning' : 'normal'">
                   <div class="card-header">
-                    <div class="card-title">失步次数</div>
-                    <div class="trend-indicator">➡️</div>
+                    <div class="card-title">误比特率 (BER)</div>
+                    <div class="trend-indicator">🎯</div>
                   </div>
                   <div class="card-content">
                     <div class="value-display">
-                      <span class="value">3</span>
-                      <span class="unit">次</span>
+                      <span class="value">{{ berStats.ber > 0 ? berStats.ber.toExponential(2) : '0' }}</span>
                     </div>
-                    <div class="description">同步信号丢失次数</div>
+                    <div class="description">错误比特 / 总比特</div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <!-- 测距指标 -->
-            <div v-else-if="tab.id === 'ranging'" class="result-section">
-              <div class="section-title">
-                <i>📏</i>
-                <span>测距精度</span>
+              <!-- 测距指标 -->
+              <div v-else-if="tab.id === 'ranging'" class="result-section">
+                <div class="section-title">
+                  <i>📏</i>
+                  <span>测距精度</span>
+                </div>
+                <div class="result-grid">
+                  <div class="result-card normal">
+                    <div class="card-header">
+                      <div class="card-title">测距精度RMS</div>
+                      <div class="trend-indicator">➡️</div>
+                    </div>
+                    <div class="card-content">
+                      <div class="value-display">
+                        <span class="value">0.85</span>
+                        <span class="unit">m</span>
+                      </div>
+                      <div class="description">测距精度均方根误差</div>
+                    </div>
+                  </div>
+                  <div class="result-card normal">
+                    <div class="card-header">
+                      <div class="card-title">测距系统偏差</div>
+                      <div class="trend-indicator">📉</div>
+                    </div>
+                    <div class="card-content">
+                      <div class="value-display">
+                        <span class="value">-0.12</span>
+                        <span class="unit">m</span>
+                      </div>
+                      <div class="description">测距系统的固有偏差</div>
+                    </div>
+                  </div>
+                  <div class="result-card normal">
+                    <div class="card-header">
+                      <div class="card-title">码相位误差</div>
+                      <div class="trend-indicator">📈</div>
+                    </div>
+                    <div class="card-content">
+                      <div class="value-display">
+                        <span class="value">23.4</span>
+                        <span class="unit">ns</span>
+                      </div>
+                      <div class="description">伪码相位测量误差</div>
+                    </div>
+                  </div>
+                  <div class="result-card normal">
+                    <div class="card-header">
+                      <div class="card-title">多普勒频移</div>
+                      <div class="trend-indicator">➡️</div>
+                    </div>
+                    <div class="card-content">
+                      <div class="value-display">
+                        <span class="value">142.6</span>
+                        <span class="unit">Hz</span>
+                      </div>
+                      <div class="description">检测到的多普勒频移值</div>
+                    </div>
+                  </div>
+                  <div class="result-card normal">
+                    <div class="card-header">
+                      <div class="card-title">信号锁定时间</div>
+                      <div class="trend-indicator">➡️</div>
+                    </div>
+                    <div class="card-content">
+                      <div class="value-display">
+                        <span class="value">2.34</span>
+                        <span class="unit">s</span>
+                      </div>
+                      <div class="description">测距信号首次锁定时间</div>
+                    </div>
+                  </div>
+                  <div class="result-card normal">
+                    <div class="card-header">
+                      <div class="card-title">跟踪环路信噪比</div>
+                      <div class="trend-indicator">📈</div>
+                    </div>
+                    <div class="card-content">
+                      <div class="value-display">
+                        <span class="value">45.8</span>
+                        <span class="unit">dB-Hz</span>
+                      </div>
+                      <div class="description">测距跟踪环路的信噪比</div>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div class="result-grid">
-                <div class="result-card normal">
-                  <div class="card-header">
-                    <div class="card-title">测距精度RMS</div>
-                    <div class="trend-indicator">➡️</div>
-                  </div>
-                  <div class="card-content">
-                    <div class="value-display">
-                      <span class="value">0.85</span>
-                      <span class="unit">m</span>
-                    </div>
-                    <div class="description">测距精度均方根误差</div>
-                  </div>
-                </div>
-                <div class="result-card normal">
-                  <div class="card-header">
-                    <div class="card-title">测距系统偏差</div>
-                    <div class="trend-indicator">📉</div>
-                  </div>
-                  <div class="card-content">
-                    <div class="value-display">
-                      <span class="value">-0.12</span>
-                      <span class="unit">m</span>
-                    </div>
-                    <div class="description">测距系统的固有偏差</div>
-                  </div>
-                </div>
-                <div class="result-card normal">
-                  <div class="card-header">
-                    <div class="card-title">码相位误差</div>
-                    <div class="trend-indicator">📈</div>
-                  </div>
-                  <div class="card-content">
-                    <div class="value-display">
-                      <span class="value">23.4</span>
-                      <span class="unit">ns</span>
-                    </div>
-                    <div class="description">伪码相位测量误差</div>
-                  </div>
-                </div>
-                <div class="result-card normal">
-                  <div class="card-header">
-                    <div class="card-title">多普勒频移</div>
-                    <div class="trend-indicator">➡️</div>
-                  </div>
-                  <div class="card-content">
-                    <div class="value-display">
-                      <span class="value">142.6</span>
-                      <span class="unit">Hz</span>
-                    </div>
-                    <div class="description">检测到的多普勒频移值</div>
-                  </div>
-                </div>
-                <div class="result-card normal">
-                  <div class="card-header">
-                    <div class="card-title">信号锁定时间</div>
-                    <div class="trend-indicator">➡️</div>
-                  </div>
-                  <div class="card-content">
-                    <div class="value-display">
-                      <span class="value">2.34</span>
-                      <span class="unit">s</span>
-                    </div>
-                    <div class="description">测距信号首次锁定时间</div>
-                  </div>
-                </div>
-                <div class="result-card normal">
-                  <div class="card-header">
-                    <div class="card-title">跟踪环路信噪比</div>
-                    <div class="trend-indicator">📈</div>
-                  </div>
-                  <div class="card-content">
-                    <div class="value-display">
-                      <span class="value">45.8</span>
-                      <span class="unit">dB-Hz</span>
-                    </div>
-                    <div class="description">测距跟踪环路的信噪比</div>
-                  </div>
-                </div>
-              </div>
-            </div>
 
-            <!-- 消息测试指标 -->
-            <div v-else-if="tab.id === 'message'" class="result-section">
-              <div class="section-title">
-                <i>💬</i>
-                <span>传输统计</span>
-              </div>
-              <div class="result-grid">
-                <div class="result-card normal">
-                  <div class="card-header">
-                    <div class="card-title">消息成功率</div>
-                    <div class="trend-indicator">➡️</div>
-                  </div>
-                  <div class="card-content">
-                    <div class="value-display">
-                      <span class="value">99.7</span>
-                      <span class="unit">%</span>
-                    </div>
-                    <div class="description">消息传输成功率统计</div>
-                  </div>
+
+              <!-- 消息测试指标 -->
+              <div v-else-if="tab.id === 'message'" class="result-section">
+                <div class="section-title">
+                  <i>💬</i>
+                  <span>传输统计</span>
                 </div>
-                <div class="result-card normal">
-                  <div class="card-header">
-                    <div class="card-title">消息总数</div>
-                    <div class="trend-indicator">📈</div>
-                  </div>
-                  <div class="card-content">
-                    <div class="value-display">
-                      <span class="value">15,678</span>
-                      <span class="unit">条</span>
+                <div class="result-grid">
+                  <div class="result-card normal">
+                    <div class="card-header">
+                      <div class="card-title">消息成功率</div>
+                      <div class="trend-indicator">➡️</div>
                     </div>
-                    <div class="description">测试期间传输的消息总数</div>
-                  </div>
-                </div>
-                <div class="result-card normal">
-                  <div class="card-header">
-                    <div class="card-title">平均消息延时</div>
-                    <div class="trend-indicator">📈</div>
-                  </div>
-                  <div class="card-content">
-                    <div class="value-display">
-                      <span class="value">45.2</span>
-                      <span class="unit">ms</span>
+                    <div class="card-content">
+                      <div class="value-display">
+                        <span class="value">99.7</span>
+                        <span class="unit">%</span>
+                      </div>
+                      <div class="description">消息传输成功率统计</div>
                     </div>
-                    <div class="description">消息传输的平均延迟时间</div>
                   </div>
-                </div>
-                <div class="result-card normal">
-                  <div class="card-header">
-                    <div class="card-title">消息吞吐量</div>
-                    <div class="trend-indicator">➡️</div>
-                  </div>
-                  <div class="card-content">
-                    <div class="value-display">
-                      <span class="value">1,024</span>
-                      <span class="unit">msg/s</span>
+                  <div class="result-card normal">
+                    <div class="card-header">
+                      <div class="card-title">消息总数</div>
+                      <div class="trend-indicator">📈</div>
                     </div>
-                    <div class="description">每秒处理的消息数量</div>
-                  </div>
-                </div>
-                <div class="result-card normal">
-                  <div class="card-header">
-                    <div class="card-title">队列深度</div>
-                    <div class="trend-indicator">📉</div>
-                  </div>
-                  <div class="card-content">
-                    <div class="value-display">
-                      <span class="value">12</span>
-                      <span class="unit">条</span>
+                    <div class="card-content">
+                      <div class="value-display">
+                        <span class="value">15,678</span>
+                        <span class="unit">条</span>
+                      </div>
+                      <div class="description">测试期间传输的消息总数</div>
                     </div>
-                    <div class="description">消息队列当前深度</div>
                   </div>
-                </div>
-                <div class="result-card normal">
-                  <div class="card-header">
-                    <div class="card-title">带宽利用率</div>
-                    <div class="trend-indicator">📈</div>
-                  </div>
-                  <div class="card-content">
-                    <div class="value-display">
-                      <span class="value">78.5</span>
-                      <span class="unit">%</span>
+                  <div class="result-card normal">
+                    <div class="card-header">
+                      <div class="card-title">平均消息延时</div>
+                      <div class="trend-indicator">📈</div>
                     </div>
-                    <div class="description">消息传输的带宽利用率</div>
+                    <div class="card-content">
+                      <div class="value-display">
+                        <span class="value">45.2</span>
+                        <span class="unit">ms</span>
+                      </div>
+                      <div class="description">消息传输的平均延迟时间</div>
+                    </div>
+                  </div>
+                  <div class="result-card normal">
+                    <div class="card-header">
+                      <div class="card-title">消息吞吐量</div>
+                      <div class="trend-indicator">➡️</div>
+                    </div>
+                    <div class="card-content">
+                      <div class="value-display">
+                        <span class="value">1,024</span>
+                        <span class="unit">msg/s</span>
+                      </div>
+                      <div class="description">每秒处理的消息数量</div>
+                    </div>
+                  </div>
+                  <div class="result-card normal">
+                    <div class="card-header">
+                      <div class="card-title">队列深度</div>
+                      <div class="trend-indicator">📉</div>
+                    </div>
+                    <div class="card-content">
+                      <div class="value-display">
+                        <span class="value">12</span>
+                        <span class="unit">条</span>
+                      </div>
+                      <div class="description">消息队列当前深度</div>
+                    </div>
+                  </div>
+                  <div class="result-card normal">
+                    <div class="card-header">
+                      <div class="card-title">带宽利用率</div>
+                      <div class="trend-indicator">📈</div>
+                    </div>
+                    <div class="card-content">
+                      <div class="value-display">
+                        <span class="value">78.5</span>
+                        <span class="unit">%</span>
+                      </div>
+                      <div class="description">消息传输的带宽利用率</div>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
 
           <div class="chart-container">
             <div class="chart-header">
@@ -340,13 +422,13 @@
 </template>
 
 <script setup>
-  import { ref } from 'vue'
+  import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+  import axios from 'axios'
+
+  const API_BASE = '/api'
 
   defineProps(['activeTab'])
   defineEmits(['update-tab'])
-
-  const testDuration = ref(120)
-  const totalPackets = ref(15680)
 
   const resultTabs = [
     { id: 'ber', name: '误码率', icon: '🎯' },
@@ -354,16 +436,331 @@
     { id: 'message', name: '消息测试', icon: '💬' }
   ]
 
-  const exportResults = () => {
-    console.log('导出测试结果...')
+  // 文件读取相关
+  const fileInput = ref(null)
+  const selectedFile = ref(null)
+  const selectedFileName = ref('')
+  const fileHexData = ref('')
+  const sendStatus = ref(null)
+
+  // 发送的原始数据
+  const sentDataHex = ref('')
+
+  // 接收消息列表
+  const receivedMessages = ref([])
+
+  // 上一个接收到的帧号
+  let lastReceivedFrameCount = 0
+
+  // SSE 连接
+  let eventSource = null
+  const sseConnected = ref(false)
+
+  // 误码率统计
+  const berStats = reactive({
+    totalFrames: 0,        // 总帧数(从帧1到最大帧号)
+    receivedFrames: 0,     // 接收帧数
+    correctFrames: 0,      // 完全正确的帧数
+    errorFrames: 0,        // 有比特错误的帧数
+    lostFrames: 0,         // 丢失帧数
+    fer: 0,                // 误帧率 = (错误帧 + 丢失帧) / 总帧数
+    ber: 0,                // 误比特率
+    errorBits: 0,          // 错误比特数
+    totalBits: 0           // 总比特数
+  })
+
+  // 处理文件选择
+  const handleFileSelect = async (event) => {
+    const file = event.target.files[0]
+    if (!file) return
+
+    selectedFile.value = file
+    selectedFileName.value = file.name
+
+    try {
+      const text = await file.text()
+      const cleanHex = text.replace(/\s/g, '').toUpperCase()
+      const hexPattern = /^[0-9A-F]+$/
+
+      if (!hexPattern.test(cleanHex)) {
+        throw new Error('文件内容包含非16进制字符')
+      }
+
+      if (cleanHex.length % 2 !== 0) {
+        throw new Error('16进制数据长度必须是偶数')
+      }
+
+      fileHexData.value = cleanHex
+      sendStatus.value = {
+        type: 'success',
+        message: `✅ 文件读取成功 (${cleanHex.length / 2} 字节)`
+      }
+
+      console.log('✅ 16进制数据读取成功')
+    } catch (error) {
+      fileHexData.value = ''
+      sendStatus.value = {
+        type: 'error',
+        message: `❌ ${error.message}`
+      }
+    }
   }
 
-  const refreshResults = () => {
-    console.log('刷新测试数据...')
+  // 发送LoRa数据
+  const sendLoraData = async () => {
+    if (!fileHexData.value) {
+      alert('请先选择文件')
+      return
+    }
+
+    if (!sseConnected.value) {
+      alert('SSE未连接,请等待连接成功')
+      return
+    }
+
+    // 发送前清零所有统计
+    clearStats()
+
+    try {
+      const response = await axios.post(`${API_BASE}/lora/send`, {
+        timing_enable: 0,
+        timing_time: 0,
+        data_content: fileHexData.value
+      })
+
+      if (response.data.success) {
+        sentDataHex.value = fileHexData.value
+        berStats.totalBits = fileHexData.value.length * 4
+
+        sendStatus.value = {
+          type: 'success',
+          message: '✅ LoRa数据发送成功,等待SSE推送接收消息...'
+        }
+
+        console.log('✅ LoRa发送成功,统计已清零,等待SSE推送')
+      }
+    } catch (error) {
+      sendStatus.value = {
+        type: 'error',
+        message: `❌ 发送失败: ${error.response?.data?.detail || error.message}`
+      }
+    }
   }
+
+  // 清零统计
+  const clearStats = () => {
+    receivedMessages.value = []
+    lastReceivedFrameCount = 0
+    berStats.totalFrames = 0
+    berStats.receivedFrames = 0
+    berStats.correctFrames = 0
+    berStats.errorFrames = 0
+    berStats.lostFrames = 0
+    berStats.fer = 0
+    berStats.ber = 0
+    berStats.errorBits = 0
+    berStats.totalBits = 0
+  }
+
+  // 清空接收数据
+  const clearReceivedData = () => {
+    receivedMessages.value = []
+    sentDataHex.value = ''
+    clearStats()
+
+    sendStatus.value = {
+      type: 'info',
+      message: 'ℹ️ 数据已清空'
+    }
+  }
+
+  // 格式化预览
+  const formatHexPreview = (hex) => {
+    return hex.length > 64 ? hex.substring(0, 64) + '...' : hex
+  }
+
+  // 处理接收到的消息(通过SSE推送)
+  const handleReceivedMessage = (msg) => {
+    const frameCount = msg.frame_count || 0
+
+    console.log(`📥 SSE推送: 收到帧#${frameCount}`)
+
+    // 检测丢帧
+    if (lastReceivedFrameCount > 0 && frameCount > lastReceivedFrameCount + 1) {
+      const lostCount = frameCount - lastReceivedFrameCount - 1
+      console.warn(`⚠️ 检测到丢帧: 帧#${lastReceivedFrameCount + 1} 到 帧#${frameCount - 1}, 共${lostCount}帧`)
+
+      for (let i = 1; i <= lostCount; i++) {
+        const lostFrameNum = lastReceivedFrameCount + i
+        receivedMessages.value.push({
+          id: `lost_${lostFrameNum}_${Date.now()}`,
+          time: new Date().toLocaleTimeString(),
+          frame_count: lostFrameNum,
+          data_hex: '(丢失)',
+          data_bytes: 0,
+          duration_ms: 0,
+          isLost: true
+        })
+        berStats.lostFrames++
+      }
+    }
+
+    // 添加接收帧
+    const receivedMsg = {
+      id: `recv_${frameCount}_${Date.now()}`,
+      time: new Date(msg.receive_time).toLocaleTimeString(),
+      frame_count: frameCount,
+      data_hex: msg.data_hex,
+      data_bytes: msg.data_bytes,
+      duration_ms: msg.duration_ms,
+      isLost: false,
+      hasError: false  // 标记是否有比特错误
+    }
+
+    berStats.receivedFrames++
+    lastReceivedFrameCount = frameCount
+
+    // 计算该帧的比特错误
+    let frameHasError = false
+    if (sentDataHex.value) {
+      frameHasError = checkFrameError(msg.data_hex)
+      receivedMsg.hasError = frameHasError
+
+      if (frameHasError) {
+        berStats.errorFrames++
+        console.log(`❌ 帧#${frameCount} 有比特错误`)
+      } else {
+        berStats.correctFrames++
+        console.log(`✅ 帧#${frameCount} 完全正确`)
+      }
+    }
+
+    receivedMessages.value.push(receivedMsg)
+
+    // 更新总帧数(从1到当前最大帧号)
+    berStats.totalFrames = Math.max(berStats.totalFrames, frameCount)
+
+    // 计算误帧率 = (错误帧数 + 丢失帧数) / 总帧数
+    if (berStats.totalFrames > 0) {
+      const totalErrorFrames = berStats.errorFrames + berStats.lostFrames
+      berStats.fer = totalErrorFrames / berStats.totalFrames
+    }
+
+    // 计算误比特率
+    if (berStats.totalBits > 0) {
+      berStats.ber = berStats.errorBits / berStats.totalBits
+    }
+
+    // 限制列表长度
+    if (receivedMessages.value.length > 100) {
+      receivedMessages.value.shift()
+    }
+  }
+
+  // 检查单帧是否有错误,并统计错误比特数
+  const checkFrameError = (receivedHex) => {
+    const sentHex = sentDataHex.value
+    if (!sentHex) return false
+
+    let frameErrorBits = 0
+    const minLength = Math.min(sentHex.length, receivedHex.length)
+
+    // 逐字节比较
+    for (let i = 0; i < minLength; i += 2) {
+      const sentByte = parseInt(sentHex.substr(i, 2), 16)
+      const recvByte = parseInt(receivedHex.substr(i, 2), 16)
+
+      if (sentByte !== recvByte) {
+        const xor = sentByte ^ recvByte
+        frameErrorBits += countBits(xor)
+      }
+    }
+
+    // 长度不同也算错误
+    const lengthDiff = Math.abs(sentHex.length - receivedHex.length)
+    frameErrorBits += lengthDiff * 4
+
+    // 累加总错误比特数
+    berStats.errorBits += frameErrorBits
+
+    // 只要有1个bit错误,这一帧就是错误帧
+    return frameErrorBits > 0
+  }
+
+  // 计算比特数
+  const countBits = (n) => {
+    let count = 0
+    while (n) {
+      count += n & 1
+      n >>= 1
+    }
+    return count
+  }
+
+  // 连接 SSE
+  const connectSSE = () => {
+    if (eventSource) {
+      eventSource.close()
+    }
+
+    console.log('🔗 正在连接SSE...')
+    eventSource = new EventSource(`${API_BASE}/lora/stream`)
+
+    eventSource.onopen = () => {
+      sseConnected.value = true
+      console.log('✅ SSE 连接成功')
+    }
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+
+        if (data.type === 'connected') {
+          console.log('📡 SSE 初始连接:', data.message)
+        } else if (data.type === 'lora_receive') {
+          handleReceivedMessage(data.data)
+        }
+      } catch (error) {
+        console.error('❌ SSE 消息解析错误:', error)
+      }
+    }
+
+    eventSource.onerror = (error) => {
+      sseConnected.value = false
+      console.error('❌ SSE 连接错误')
+
+      // 5秒后重连
+      setTimeout(() => {
+        if (!sseConnected.value) {
+          console.log('🔄 尝试重新连接SSE...')
+          connectSSE()
+        }
+      }, 5000)
+    }
+  }
+
+  // 重新连接
+  const reconnectSSE = () => {
+    console.log('🔄 手动重新连接SSE')
+    connectSSE()
+  }
+
+  // 组件挂载
+  onMounted(() => {
+    connectSSE()
+  })
+
+  // 组件卸载
+  onUnmounted(() => {
+    if (eventSource) {
+      eventSource.close()
+      eventSource = null
+      console.log('⏹️ SSE 连接已关闭')
+    }
+  })
 </script>
 
-<style scoped>
+  <style scoped >
   .section {
     background: rgba(255, 255, 255, 0.95);
     border-radius: 15px;
@@ -373,10 +770,10 @@
     transition: transform 0.3s ease, box-shadow 0.3s ease;
   }
 
-    .section:hover {
-      transform: translateY(-5px);
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-    }
+  .section:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  }
 
   .section-header {
     background: linear-gradient(135deg, #f8f9fa, #e9ecef);
@@ -492,13 +889,6 @@
       opacity: 1;
       transform: translateY(0);
     }
-  }
-
-  .result-summary {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 20px;
-    margin-bottom: 30px;
   }
 
   .summary-card {
@@ -701,19 +1091,535 @@
     }
   }
 
+  /* 新增: 文件读取区域样式 */
+  .file-reader-section {
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: 25px;
+    margin-bottom: 30px;
+    border: 2px solid #e9ecef;
+    transition: all 0.3s ease;
+  }
+
+    .file-reader-section:hover {
+      border-color: #007bff;
+      box-shadow: 0 8px 25px rgba(0, 123, 255, 0.1);
+    }
+
+  .file-reader-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 18px;
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #e9ecef;
+  }
+
+  .file-reader-content {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .file-input-group {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+  }
+
+  .file-input {
+    display: none;
+  }
+
+  .file-label {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 20px;
+    background: white;
+    border: 2px dashed #ced4da;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 14px;
+    color: #6c757d;
+  }
+
+    .file-label:hover {
+      border-color: #007bff;
+      background: #f8f9fa;
+      color: #007bff;
+    }
+
+    .file-label i {
+      font-size: 18px;
+    }
+
+  .read-file-btn {
+    padding: 12px 24px;
+    background: #007bff;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+  }
+
+    .read-file-btn:hover:not(:disabled) {
+      background: #0056b3;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+    }
+
+    .read-file-btn:disabled {
+      background: #6c757d;
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
+  /* 文件内容显示 */
+  .file-content-display {
+    background: white;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .content-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background: #f8f9fa;
+    border-bottom: 2px solid #e9ecef;
+    font-weight: 600;
+    color: #2c3e50;
+  }
+
+  .copy-btn {
+    padding: 6px 12px;
+    background: #28a745;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+    .copy-btn:hover {
+      background: #218838;
+      transform: translateY(-1px);
+    }
+
+  .content-body {
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 15px 20px;
+    background: #1e1e1e;
+  }
+
+  .hex-display {
+    font-family: 'Courier New', Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .hex-line {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 4px;
+  }
+
+  .line-number {
+    color: #858585;
+    user-select: none;
+    min-width: 80px;
+  }
+
+  .hex-bytes {
+    color: #4ec9b0;
+    flex: 1;
+    min-width: 400px;
+  }
+
+  .ascii-chars {
+    color: #ce9178;
+    min-width: 150px;
+    font-size: 12px;
+  }
+
+  .content-footer {
+    display: flex;
+    justify-content: space-between;
+    padding: 12px 20px;
+    background: #f8f9fa;
+    border-top: 2px solid #e9ecef;
+    font-size: 13px;
+    color: #6c757d;
+  }
+
+  /* 滚动条样式 */
+  .content-body::-webkit-scrollbar {
+    width: 10px;
+  }
+
+  .content-body::-webkit-scrollbar-track {
+    background: #2d2d2d;
+  }
+
+  .content-body::-webkit-scrollbar-thumb {
+    background: #555;
+    border-radius: 5px;
+  }
+
+    .content-body::-webkit-scrollbar-thumb:hover {
+      background: #777;
+    }
+
+  /* 响应式 */
   @media (max-width: 768px) {
-    .result-summary,
-    .result-grid {
-      grid-template-columns: 1fr;
+    .file-input-group {
+      flex-direction: column;
+    }
+
+    .file-label {
+      width: 100%;
+    }
+
+    .read-file-btn {
+      width: 100%;
+      justify-content: center;
+    }
+
+    .hex-line {
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .ascii-chars {
+      display: none;
+    }
+  }
+
+  .file-sender-section,
+  .receive-section {
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: 25px;
+    margin-bottom: 30px;
+    border: 2px solid #e9ecef;
+  }
+
+  .file-sender-header,
+  .receive-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 18px;
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #e9ecef;
+  }
+
+  .receive-header {
+    justify-content: space-between;
+  }
+
+  .clear-receive-btn {
+    padding: 6px 12px;
+    background: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .file-input-group {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+  }
+
+  .file-input {
+    display: none;
+  }
+
+  .file-label {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 20px;
+    background: white;
+    border: 2px dashed #ced4da;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+
+    .file-label:hover {
+      border-color: #007bff;
+    }
+
+  .send-lora-btn {
+    padding: 12px 24px;
+    background: #28a745;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+  }
+
+    .send-lora-btn:disabled {
+      background: #6c757d;
+      cursor: not-allowed;
+    }
+
+  .file-preview {
+    background: white;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-top: 15px;
+  }
+
+  .preview-header {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 15px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .preview-content {
+    padding: 15px;
+    font-family: 'Courier New', monospace;
+    color: #2c3e50;
+    word-break: break-all;
+  }
+
+  .send-status {
+    margin-top: 15px;
+    padding: 12px 15px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+    .send-status.success {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .send-status.error {
+      background: #f8d7da;
+      color: #721c24;
+    }
+
+  .receive-list {
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  .receive-item {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 10px;
+    display: grid;
+    grid-template-columns: 100px 80px 1fr 150px;
+    gap: 15px;
+    align-items: center;
+  }
+
+  .receive-time {
+    font-size: 13px;
+    color: #6c757d;
+    font-family: monospace;
+  }
+
+  .receive-frame {
+    font-weight: 600;
+    color: #007bff;
+    font-size: 14px;
+  }
+
+  .receive-data {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .data-hex {
+    font-family: 'Courier New', monospace;
+    color: #2c3e50;
+    font-size: 13px;
+    word-break: break-all;
+  }
+
+  .receive-stats {
+    display: flex;
+    gap: 10px;
+    font-size: 12px;
+    color: #6c757d;
+  }
+
+  .empty-receive {
+    text-align: center;
+    padding: 40px;
+    color: #adb5bd;
+  }
+
+    .empty-receive i {
+      font-size: 48px;
+      display: block;
+      margin-bottom: 10px;
+    }
+
+    .lost-badge {
+      background: #dc3545;
+      color: white;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      margin-left: 8px;
+    }
+
+    .receive-item.frame-lost {
+      background: #fff5f5;
+      border-left: 3px solid #dc3545;
+    }
+
+    .frame-lost .data-hex {
+      color: #dc3545;
+      font-style: italic;
+    }
+
+    .connection-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+
+      .connection-status.connected {
+        background: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+      }
+
+      .connection-status .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: currentColor;
+      }
+
+      .connection-status.connected .status-dot {
+        animation: pulse 2s infinite;
+      }
+
+    @keyframes pulse {
+      0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+
+      50% {
+        opacity: 0.6;
+        transform: scale(1.2);
+      }
     }
 
     .result-controls {
-      flex-direction: column;
+      display: flex;
+      gap: 10px;
+      align-items: center;
     }
 
-    .chart-header {
-      flex-direction: column;
-      gap: 10px;
+    .send-lora-btn:disabled {
+      background: #6c757d;
+      cursor: not-allowed;
+      opacity: 0.6;
     }
-  }
+
+    .lost-badge {
+      background: #dc3545;
+      color: white;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      margin-left: 8px;
+    }
+
+    .receive-item.frame-lost {
+      background: #fff5f5;
+      border-left: 3px solid #dc3545;
+    }
+
+    .frame-lost .data-hex {
+      color: #dc3545;
+      font-style: italic;
+    }
+
+    .receive-item.frame-error {
+      background: #fff8e5;
+      border-left: 3px solid #ffc107;
+    }
+
+    .error-badge {
+      background: #ffc107;
+      color: #856404;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      margin-left: 8px;
+    }
+
+    .correct-badge {
+      background: #28a745;
+      color: white;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      margin-left: 8px;
+    }
+
+    .frame-error .data-hex {
+      color: #856404;
+    }
 </style>
