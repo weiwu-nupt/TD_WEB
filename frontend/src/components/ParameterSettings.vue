@@ -109,6 +109,9 @@
 
   const API_BASE = '/api'
 
+  // 定义 emit
+  const emit = defineEmits(['file-selected'])
+
   // LoRa文件相关
   const loraFileInput = ref(null)
   const loraFileName = ref('')
@@ -190,10 +193,15 @@
       }
 
       loraFileData.value = cleanHex
+
+      // 发送给App.vue
+      emit('file-selected', loraFileName.value, loraFileData.value)
+
       console.log(`✅ LoRa文件读取成功: ${cleanHex.length / 2} 字节`)
       alert(`✅ LoRa文件读取成功 (${cleanHex.length / 2} 字节)`)
     } catch (error) {
       loraFileData.value = ''
+      emit('file-selected', '', '')
       console.error('文件读取失败:', error)
       alert(`❌ ${error.message}`)
     }

@@ -24,9 +24,11 @@
       <AppHeader />
 
       <main class="main-content">
-        <ParameterSettings />
+        <ParameterSettings @file-selected="handleFileSelected" />
         <SceneSettings />
         <ResultDisplay :active-tab="activeResultTab"
+                       :lora-file-name="sharedLoraFileName"
+                       :lora-file-data="sharedLoraFileData"
                        @update-tab="activeResultTab = $event" />
       </main>
 
@@ -172,6 +174,17 @@
   // 初始状态：空字符串表示显示选择界面
   const selectedSystem = ref<string>('')
   const activeResultTab = ref('ber')
+
+  // 共享的LoRa文件数据
+  const sharedLoraFileName = ref('')
+  const sharedLoraFileData = ref('')
+
+  // 处理参数设置页面的文件选择
+  const handleFileSelected = (fileName: string, fileData: string) => {
+    sharedLoraFileName.value = fileName
+    sharedLoraFileData.value = fileData
+    console.log(`✅ App接收到文件: ${fileName}, ${fileData.length / 2} 字节`)
+  }
 
   // 在虚实融合系统的数据中添加
   const messages = ref([])

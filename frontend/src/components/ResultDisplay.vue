@@ -34,37 +34,41 @@
              class="tab-panel">
 
           <div class="result-sections">
-            <!-- 误码率指标 -->
             <div v-if="tab.id === 'ber'" class="result-section">
 
-              <!-- 文件发送区域 -->
+              <!-- 文件发送区域 - 简化版 -->
               <div class="file-sender-section">
                 <div class="file-sender-header">
                   <i>📡</i>
                   <span>LoRa数据发送</span>
                 </div>
                 <div class="file-sender-content">
-                  <div class="file-input-group">
-                    <input type="file"
-                           ref="fileInput"
-                           @change="handleFileSelect"
-                           accept=".txt"
-                           class="file-input"
-                           id="txtFileInput" />
-                    <label for="txtFileInput" class="file-label">
-                      <i>📂</i>
-                      <span>{{ selectedFileName || '选择16进制TXT文件' }}</span>
-                    </label>
+
+                  <!-- 显示已选择的文件 -->
+                  <div v-if="props.loraFileData" class="selected-file-info">
+                    <div class="file-badge">
+                      <i>📄</i>
+                      <span>{{ props.loraFileName }}</span>
+                      <span class="file-size">({{ props.loraFileData.length / 2 }} 字节)</span>
+                    </div>
+                    <div class="file-preview">
+                      <div class="preview-header">
+                        <span>数据预览 (不含帧计数)</span>
+                      </div>
+                      <div class="preview-content">
+                        {{ formatHexPreview(props.loraFileData) }}
+                      </div>
+                    </div>
                   </div>
 
-                  <!-- 说明提示 -->
-                  <div class="info-tip">
-                    <i>ℹ️</i>
-                    <span>发送格式: 帧计数(1字节) + 文件数据,回传时也会包含帧计数</span>
+                  <!-- 没有文件时的提示 -->
+                  <div v-else class="no-file-warning">
+                    <i>⚠️</i>
+                    <span>请先在"参数设置"页面选择LoRa传输文件</span>
                   </div>
 
-                  <!-- 发送控制 -->
-                  <div class="send-controls">
+                  <!-- 发送控制 - 只有选择文件后才显示 -->
+                  <div v-if="props.loraFileData" class="send-controls">
                     <div class="control-group">
                       <label>发送间隔 (秒):</label>
                       <input type="number"
@@ -77,7 +81,7 @@
                     <div class="control-buttons">
                       <button class="send-once-btn"
                               @click="sendOnce"
-                              :disabled="!fileHexData || !sseConnected">
+                              :disabled="!sseConnected">
                         <i>📤</i>
                         发送一次
                       </button>
@@ -85,7 +89,7 @@
                       <button v-if="!isSending"
                               class="send-auto-btn"
                               @click="startAutoSend"
-                              :disabled="!fileHexData || !sseConnected">
+                              :disabled="!sseConnected">
                         <i>▶️</i>
                         开始循环
                       </button>
@@ -100,34 +104,16 @@
                   </div>
 
                   <!-- 发送状态 -->
-                  <div class="send-status-box">
+                  <div v-if="props.loraFileData" class="send-status-box">
                     <div class="status-item">
                       <span class="status-label">发送计数:</span>
                       <span class="status-value">{{ sendCount }}</span>
-                    </div>
-                    <div class="status-item">
-                      <span class="status-label">已发送:</span>
-                      <span class="status-value">{{ sendCount }} 帧</span>
                     </div>
                     <div class="status-item">
                       <span class="status-label">发送状态:</span>
                       <span class="status-value" :class="{ sending: isSending }">
                         {{ isSending ? '🔄 循环发送中...' : '⏹️ 已停止' }}
                       </span>
-                    </div>
-                  </div>
-
-                  <!-- 文件预览 -->
-                  <div v-if="fileHexData" class="file-preview">
-                    <div class="preview-header">
-                      <span>数据预览 (不含帧计数)</span>
-                      <span class="data-length">{{ fileHexData.length / 2 }} 字节</span>
-                    </div>
-                    <div class="preview-content">
-                      {{ formatHexPreview(fileHexData) }}
-                    </div>
-                    <div class="preview-note">
-                      实际发送: [帧计数 1字节] + {{ fileHexData.length / 2 }} 字节数据
                     </div>
                   </div>
 
@@ -139,7 +125,7 @@
                 </div>
               </div>
 
-              <!-- 接收数据显示 -->
+              <!-- 接收数据显示 - 优化样式 -->
               <div class="receive-section">
                 <div class="receive-header">
                   <i>📥</i>
@@ -154,24 +140,24 @@
                        :key="msg.id"
                        class="receive-item"
                        :class="{
-             'frame-lost': msg.isLost,
-             'frame-error': msg.hasError
-           }">
+                       'frame-lost': msg.isLost,
+                       'frame-error': msg.hasError,
+                       'frame-correct': !msg.isLost && !msg.hasError
+                     }">
                     <div class="receive-time">{{ msg.time }}</div>
-                    <div class="receive-frame">
+                    <div class="receive-frame"
+                         :class="{
+                         'frame-num-lost': msg.isLost,
+                         'frame-num-error': msg.hasError,
+                         'frame-num-correct': !msg.isLost && !msg.hasError
+                       }">
                       帧 #{{ msg.frame_count }}
-                      <span v-if="msg.isLost" class="lost-badge">丢失</span>
-                      <span v-else-if="msg.hasError" class="error-badge">有错</span>
-                      <span v-else class="correct-badge">正确</span>
                     </div>
                     <div class="receive-data">
-                      <span class="data-label">数据(不含计数):</span>
+                      <span class="data-label">数据:</span>
                       <span class="data-hex">{{ msg.data_hex }}</span>
                     </div>
-                    <div class="receive-stats">
-                      <span>{{ msg.data_bytes }} 字节</span>
-                      <span v-if="!msg.isLost">{{ msg.duration_ms }} ms</span>
-                    </div>
+                    <!-- 移除字节数和ms显示 -->
                   </div>
 
                   <div v-if="receivedMessages.length === 0" class="empty-receive">
@@ -278,183 +264,183 @@
               </div>
             </div>
 
-              <!-- 测距指标 -->
-              <div v-else-if="tab.id === 'ranging'" class="result-section">
-                <div class="section-title">
-                  <i>📏</i>
-                  <span>测距精度</span>
-                </div>
-                <div class="result-grid">
-                  <div class="result-card normal">
-                    <div class="card-header">
-                      <div class="card-title">测距精度RMS</div>
-                      <div class="trend-indicator">➡️</div>
-                    </div>
-                    <div class="card-content">
-                      <div class="value-display">
-                        <span class="value">0.85</span>
-                        <span class="unit">m</span>
-                      </div>
-                      <div class="description">测距精度均方根误差</div>
-                    </div>
-                  </div>
-                  <div class="result-card normal">
-                    <div class="card-header">
-                      <div class="card-title">测距系统偏差</div>
-                      <div class="trend-indicator">📉</div>
-                    </div>
-                    <div class="card-content">
-                      <div class="value-display">
-                        <span class="value">-0.12</span>
-                        <span class="unit">m</span>
-                      </div>
-                      <div class="description">测距系统的固有偏差</div>
-                    </div>
-                  </div>
-                  <div class="result-card normal">
-                    <div class="card-header">
-                      <div class="card-title">码相位误差</div>
-                      <div class="trend-indicator">📈</div>
-                    </div>
-                    <div class="card-content">
-                      <div class="value-display">
-                        <span class="value">23.4</span>
-                        <span class="unit">ns</span>
-                      </div>
-                      <div class="description">伪码相位测量误差</div>
-                    </div>
-                  </div>
-                  <div class="result-card normal">
-                    <div class="card-header">
-                      <div class="card-title">多普勒频移</div>
-                      <div class="trend-indicator">➡️</div>
-                    </div>
-                    <div class="card-content">
-                      <div class="value-display">
-                        <span class="value">142.6</span>
-                        <span class="unit">Hz</span>
-                      </div>
-                      <div class="description">检测到的多普勒频移值</div>
-                    </div>
-                  </div>
-                  <div class="result-card normal">
-                    <div class="card-header">
-                      <div class="card-title">信号锁定时间</div>
-                      <div class="trend-indicator">➡️</div>
-                    </div>
-                    <div class="card-content">
-                      <div class="value-display">
-                        <span class="value">2.34</span>
-                        <span class="unit">s</span>
-                      </div>
-                      <div class="description">测距信号首次锁定时间</div>
-                    </div>
-                  </div>
-                  <div class="result-card normal">
-                    <div class="card-header">
-                      <div class="card-title">跟踪环路信噪比</div>
-                      <div class="trend-indicator">📈</div>
-                    </div>
-                    <div class="card-content">
-                      <div class="value-display">
-                        <span class="value">45.8</span>
-                        <span class="unit">dB-Hz</span>
-                      </div>
-                      <div class="description">测距跟踪环路的信噪比</div>
-                    </div>
-                  </div>
-                </div>
+            <!-- 测距指标 -->
+            <div v-else-if="tab.id === 'ranging'" class="result-section">
+              <div class="section-title">
+                <i>📏</i>
+                <span>测距精度</span>
               </div>
-
-
-              <!-- 消息测试指标 -->
-              <div v-else-if="tab.id === 'message'" class="result-section">
-                <div class="section-title">
-                  <i>💬</i>
-                  <span>传输统计</span>
+              <div class="result-grid">
+                <div class="result-card normal">
+                  <div class="card-header">
+                    <div class="card-title">测距精度RMS</div>
+                    <div class="trend-indicator">➡️</div>
+                  </div>
+                  <div class="card-content">
+                    <div class="value-display">
+                      <span class="value">0.85</span>
+                      <span class="unit">m</span>
+                    </div>
+                    <div class="description">测距精度均方根误差</div>
+                  </div>
                 </div>
-                <div class="result-grid">
-                  <div class="result-card normal">
-                    <div class="card-header">
-                      <div class="card-title">消息成功率</div>
-                      <div class="trend-indicator">➡️</div>
-                    </div>
-                    <div class="card-content">
-                      <div class="value-display">
-                        <span class="value">99.7</span>
-                        <span class="unit">%</span>
-                      </div>
-                      <div class="description">消息传输成功率统计</div>
-                    </div>
+                <div class="result-card normal">
+                  <div class="card-header">
+                    <div class="card-title">测距系统偏差</div>
+                    <div class="trend-indicator">📉</div>
                   </div>
-                  <div class="result-card normal">
-                    <div class="card-header">
-                      <div class="card-title">消息总数</div>
-                      <div class="trend-indicator">📈</div>
+                  <div class="card-content">
+                    <div class="value-display">
+                      <span class="value">-0.12</span>
+                      <span class="unit">m</span>
                     </div>
-                    <div class="card-content">
-                      <div class="value-display">
-                        <span class="value">15,678</span>
-                        <span class="unit">条</span>
-                      </div>
-                      <div class="description">测试期间传输的消息总数</div>
-                    </div>
+                    <div class="description">测距系统的固有偏差</div>
                   </div>
-                  <div class="result-card normal">
-                    <div class="card-header">
-                      <div class="card-title">平均消息延时</div>
-                      <div class="trend-indicator">📈</div>
-                    </div>
-                    <div class="card-content">
-                      <div class="value-display">
-                        <span class="value">45.2</span>
-                        <span class="unit">ms</span>
-                      </div>
-                      <div class="description">消息传输的平均延迟时间</div>
-                    </div>
+                </div>
+                <div class="result-card normal">
+                  <div class="card-header">
+                    <div class="card-title">码相位误差</div>
+                    <div class="trend-indicator">📈</div>
                   </div>
-                  <div class="result-card normal">
-                    <div class="card-header">
-                      <div class="card-title">消息吞吐量</div>
-                      <div class="trend-indicator">➡️</div>
+                  <div class="card-content">
+                    <div class="value-display">
+                      <span class="value">23.4</span>
+                      <span class="unit">ns</span>
                     </div>
-                    <div class="card-content">
-                      <div class="value-display">
-                        <span class="value">1,024</span>
-                        <span class="unit">msg/s</span>
-                      </div>
-                      <div class="description">每秒处理的消息数量</div>
-                    </div>
+                    <div class="description">伪码相位测量误差</div>
                   </div>
-                  <div class="result-card normal">
-                    <div class="card-header">
-                      <div class="card-title">队列深度</div>
-                      <div class="trend-indicator">📉</div>
-                    </div>
-                    <div class="card-content">
-                      <div class="value-display">
-                        <span class="value">12</span>
-                        <span class="unit">条</span>
-                      </div>
-                      <div class="description">消息队列当前深度</div>
-                    </div>
+                </div>
+                <div class="result-card normal">
+                  <div class="card-header">
+                    <div class="card-title">多普勒频移</div>
+                    <div class="trend-indicator">➡️</div>
                   </div>
-                  <div class="result-card normal">
-                    <div class="card-header">
-                      <div class="card-title">带宽利用率</div>
-                      <div class="trend-indicator">📈</div>
+                  <div class="card-content">
+                    <div class="value-display">
+                      <span class="value">142.6</span>
+                      <span class="unit">Hz</span>
                     </div>
-                    <div class="card-content">
-                      <div class="value-display">
-                        <span class="value">78.5</span>
-                        <span class="unit">%</span>
-                      </div>
-                      <div class="description">消息传输的带宽利用率</div>
+                    <div class="description">检测到的多普勒频移值</div>
+                  </div>
+                </div>
+                <div class="result-card normal">
+                  <div class="card-header">
+                    <div class="card-title">信号锁定时间</div>
+                    <div class="trend-indicator">➡️</div>
+                  </div>
+                  <div class="card-content">
+                    <div class="value-display">
+                      <span class="value">2.34</span>
+                      <span class="unit">s</span>
                     </div>
+                    <div class="description">测距信号首次锁定时间</div>
+                  </div>
+                </div>
+                <div class="result-card normal">
+                  <div class="card-header">
+                    <div class="card-title">跟踪环路信噪比</div>
+                    <div class="trend-indicator">📈</div>
+                  </div>
+                  <div class="card-content">
+                    <div class="value-display">
+                      <span class="value">45.8</span>
+                      <span class="unit">dB-Hz</span>
+                    </div>
+                    <div class="description">测距跟踪环路的信噪比</div>
                   </div>
                 </div>
               </div>
             </div>
+
+
+            <!-- 消息测试指标 -->
+            <div v-else-if="tab.id === 'message'" class="result-section">
+              <div class="section-title">
+                <i>💬</i>
+                <span>传输统计</span>
+              </div>
+              <div class="result-grid">
+                <div class="result-card normal">
+                  <div class="card-header">
+                    <div class="card-title">消息成功率</div>
+                    <div class="trend-indicator">➡️</div>
+                  </div>
+                  <div class="card-content">
+                    <div class="value-display">
+                      <span class="value">99.7</span>
+                      <span class="unit">%</span>
+                    </div>
+                    <div class="description">消息传输成功率统计</div>
+                  </div>
+                </div>
+                <div class="result-card normal">
+                  <div class="card-header">
+                    <div class="card-title">消息总数</div>
+                    <div class="trend-indicator">📈</div>
+                  </div>
+                  <div class="card-content">
+                    <div class="value-display">
+                      <span class="value">15,678</span>
+                      <span class="unit">条</span>
+                    </div>
+                    <div class="description">测试期间传输的消息总数</div>
+                  </div>
+                </div>
+                <div class="result-card normal">
+                  <div class="card-header">
+                    <div class="card-title">平均消息延时</div>
+                    <div class="trend-indicator">📈</div>
+                  </div>
+                  <div class="card-content">
+                    <div class="value-display">
+                      <span class="value">45.2</span>
+                      <span class="unit">ms</span>
+                    </div>
+                    <div class="description">消息传输的平均延迟时间</div>
+                  </div>
+                </div>
+                <div class="result-card normal">
+                  <div class="card-header">
+                    <div class="card-title">消息吞吐量</div>
+                    <div class="trend-indicator">➡️</div>
+                  </div>
+                  <div class="card-content">
+                    <div class="value-display">
+                      <span class="value">1,024</span>
+                      <span class="unit">msg/s</span>
+                    </div>
+                    <div class="description">每秒处理的消息数量</div>
+                  </div>
+                </div>
+                <div class="result-card normal">
+                  <div class="card-header">
+                    <div class="card-title">队列深度</div>
+                    <div class="trend-indicator">📉</div>
+                  </div>
+                  <div class="card-content">
+                    <div class="value-display">
+                      <span class="value">12</span>
+                      <span class="unit">条</span>
+                    </div>
+                    <div class="description">消息队列当前深度</div>
+                  </div>
+                </div>
+                <div class="result-card normal">
+                  <div class="card-header">
+                    <div class="card-title">带宽利用率</div>
+                    <div class="trend-indicator">📈</div>
+                  </div>
+                  <div class="card-content">
+                    <div class="value-display">
+                      <span class="value">78.5</span>
+                      <span class="unit">%</span>
+                    </div>
+                    <div class="description">消息传输的带宽利用率</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
 
           <div class="chart-container">
             <div class="chart-header">
@@ -479,13 +465,18 @@
 </template>
 
 <script setup>
-  import { ref, reactive, onMounted, onUnmounted } from 'vue'
+  import { ref, reactive, onMounted, onUnmounted, watch } from 'vue'
   import axios from 'axios'
 
   const API_BASE = '/api'
 
-  defineProps(['activeTab'])
-  defineEmits(['update-tab'])
+  const props = defineProps({
+    activeTab: String,
+    loraFileName: String,
+    loraFileData: String
+  })
+
+  const emit = defineEmits(['update-tab'])
 
   const resultTabs = [
     { id: 'ber', name: '误码率', icon: '🎯' },
@@ -493,115 +484,153 @@
     { id: 'message', name: '消息测试', icon: '💬' }
   ]
 
-  // 文件读取相关
-  const fileInput = ref(null)
-  const selectedFile = ref(null)
-  const selectedFileName = ref('')
-  const fileHexData = ref('')
+  // 发送相关
+  const sendInterval = ref(1)
+  const sendCount = ref(0)
+  const isSending = ref(false)
   const sendStatus = ref(null)
+  let sendTimer = null  // 定时器引用
+
+  // 接收相关
+  const receivedMessages = ref([])
+  let lastReceivedFrameCount = 0
+
+  // SSE
+  let eventSource = null
+  const sseConnected = ref(false)
 
   // 发送的原始数据
   const sentDataHex = ref('')
 
-  // 接收消息列表
-  const receivedMessages = ref([])
-
-  // 上一个接收到的帧号
-  let lastReceivedFrameCount = 0
-
-  // SSE 连接
-  let eventSource = null
-  const sseConnected = ref(false)
-
   // 误码率统计
   const berStats = reactive({
-    totalFrames: 0,        // 总帧数(从帧1到最大帧号)
-    receivedFrames: 0,     // 接收帧数
-    correctFrames: 0,      // 完全正确的帧数
-    errorFrames: 0,        // 有比特错误的帧数
-    lostFrames: 0,         // 丢失帧数
-    fer: 0,                // 误帧率 = (错误帧 + 丢失帧) / 总帧数
-    ber: 0,                // 误比特率
-    errorBits: 0,          // 错误比特数
-    totalBits: 0           // 总比特数
+    totalFrames: 0,
+    receivedFrames: 0,
+    correctFrames: 0,
+    errorFrames: 0,
+    lostFrames: 0,
+    fer: 0,
+    ber: 0,
+    errorBits: 0,
+    totalBits: 0
   })
 
-  // 处理文件选择
-  const handleFileSelect = async (event) => {
-    const file = event.target.files[0]
-    if (!file) return
-
-    selectedFile.value = file
-    selectedFileName.value = file.name
-
-    try {
-      const text = await file.text()
-      const cleanHex = text.replace(/\s/g, '').toUpperCase()
-      const hexPattern = /^[0-9A-F]+$/
-
-      if (!hexPattern.test(cleanHex)) {
-        throw new Error('文件内容包含非16进制字符')
-      }
-
-      if (cleanHex.length % 2 !== 0) {
-        throw new Error('16进制数据长度必须是偶数')
-      }
-
-      fileHexData.value = cleanHex
-      sendStatus.value = {
-        type: 'success',
-        message: `✅ 文件读取成功 (${cleanHex.length / 2} 字节)`
-      }
-
-      console.log('✅ 16进制数据读取成功')
-    } catch (error) {
-      fileHexData.value = ''
-      sendStatus.value = {
-        type: 'error',
-        message: `❌ ${error.message}`
-      }
+  // 监听props变化
+  watch(() => props.loraFileData, (newData) => {
+    console.log('👀 ResultDisplay: loraFileData changed, length:', newData?.length || 0)
+    if (newData) {
+      sentDataHex.value = newData
+      berStats.totalBits = newData.length * 4
     }
-  }
+  }, { immediate: true })
 
-  // 发送LoRa数据
-  const sendLoraData = async () => {
-    if (!fileHexData.value) {
-      alert('请先选择文件')
+  // 发送一次
+  const sendOnce = async () => {
+    console.log('📤 sendOnce调用')
+    console.log('  props.loraFileData:', props.loraFileData ? '有数据' : '无数据')
+    console.log('  sseConnected:', sseConnected.value)
+
+    if (!props.loraFileData) {
+      console.error('❌ 没有文件数据，停止发送')
+      stopAutoSend()  // 强制停止
+      alert('请先在"参数设置"页面选择文件')
       return
     }
 
     if (!sseConnected.value) {
+      console.error('❌ SSE未连接，停止发送')
+      stopAutoSend()  // 强制停止
       alert('SSE未连接,请等待连接成功')
       return
     }
 
-    // 发送前清零所有统计
-    clearStats()
-
     try {
+      sendCount.value++
+      if (sendCount.value > 255) {
+        sendCount.value = 1
+      }
+
+      console.log(`📨 发送帧#${sendCount.value}`)
+
       const response = await axios.post(`${API_BASE}/lora/send`, {
         timing_enable: 0,
         timing_time: 0,
-        data_content: fileHexData.value
+        data_content: props.loraFileData,
+        frame_count: sendCount.value
       })
 
       if (response.data.success) {
-        sentDataHex.value = fileHexData.value
-        berStats.totalBits = fileHexData.value.length * 4
-
         sendStatus.value = {
           type: 'success',
-          message: '✅ LoRa数据发送成功,等待SSE推送接收消息...'
+          message: `✅ 发送成功 (帧#${sendCount.value})`
         }
-
-        console.log('✅ LoRa发送成功,统计已清零,等待SSE推送')
+        console.log(`✅ 帧#${sendCount.value} 发送成功`)
       }
     } catch (error) {
       sendStatus.value = {
         type: 'error',
         message: `❌ 发送失败: ${error.response?.data?.detail || error.message}`
       }
+      console.error('❌ 发送失败:', error)
+      stopAutoSend()  // 发送失败时停止
     }
+  }
+
+  // 开始循环发送
+  const startAutoSend = () => {
+    console.log('🔄 startAutoSend调用')
+    console.log('  props.loraFileData:', props.loraFileData ? '有数据' : '无数据')
+    console.log('  sseConnected:', sseConnected.value)
+    console.log('  当前isSending:', isSending.value)
+
+    if (!props.loraFileData || !sseConnected.value) {
+      console.error('❌ 条件不满足，无法开始循环发送')
+      return
+    }
+
+    if (isSending.value) {
+      console.warn('⚠️ 已经在循环发送中，忽略重复调用')
+      return
+    }
+
+    // 清零统计
+    clearStats()
+    sendCount.value = 0
+    isSending.value = true
+
+    console.log('✅ 开始循环发送, 间隔:', sendInterval.value, '秒')
+
+    // 立即发送第一次
+    sendOnce()
+
+    // 启动定时器
+    sendTimer = setInterval(() => {
+      console.log('⏰ 定时器触发, isSending:', isSending.value)
+      if (isSending.value) {
+        sendOnce()
+      } else {
+        console.warn('⚠️ isSending为false，但定时器还在运行，清除定时器')
+        stopAutoSend()
+      }
+    }, sendInterval.value * 1000)
+
+    console.log('✅ 定时器已启动, ID:', sendTimer)
+  }
+
+  // 停止循环发送
+  const stopAutoSend = () => {
+    console.log('⏹️ stopAutoSend调用')
+    console.log('  当前sendTimer:', sendTimer)
+    console.log('  当前isSending:', isSending.value)
+
+    if (sendTimer) {
+      clearInterval(sendTimer)
+      sendTimer = null
+      console.log('✅ 定时器已清除')
+    }
+
+    isSending.value = false
+    console.log('✅ isSending已设置为false')
   }
 
   // 清零统计
@@ -624,7 +653,6 @@
     receivedMessages.value = []
     sentDataHex.value = ''
     clearStats()
-
     sendStatus.value = {
       type: 'info',
       message: 'ℹ️ 数据已清空'
@@ -633,13 +661,13 @@
 
   // 格式化预览
   const formatHexPreview = (hex) => {
+    if (!hex) return ''
     return hex.length > 64 ? hex.substring(0, 64) + '...' : hex
   }
 
-  // 处理接收到的消息(通过SSE推送)
+  // 处理接收到的消息
   const handleReceivedMessage = (msg) => {
     const frameCount = msg.frame_count || 0
-
     console.log(`📥 SSE推送: 收到帧#${frameCount}`)
 
     // 检测丢帧
@@ -665,13 +693,13 @@
     // 添加接收帧
     const receivedMsg = {
       id: `recv_${frameCount}_${Date.now()}`,
-      time: new Date(msg.receive_time).toLocaleTimeString(),
+      time: new Date().toLocaleTimeString(),
       frame_count: frameCount,
       data_hex: msg.data_hex,
       data_bytes: msg.data_bytes,
       duration_ms: msg.duration_ms,
       isLost: false,
-      hasError: false  // 标记是否有比特错误
+      hasError: false
     }
 
     berStats.receivedFrames++
@@ -694,10 +722,10 @@
 
     receivedMessages.value.push(receivedMsg)
 
-    // 更新总帧数(从1到当前最大帧号)
+    // 更新总帧数
     berStats.totalFrames = Math.max(berStats.totalFrames, frameCount)
 
-    // 计算误帧率 = (错误帧数 + 丢失帧数) / 总帧数
+    // 计算误帧率
     if (berStats.totalFrames > 0) {
       const totalErrorFrames = berStats.errorFrames + berStats.lostFrames
       berStats.fer = totalErrorFrames / berStats.totalFrames
@@ -714,7 +742,7 @@
     }
   }
 
-  // 检查单帧是否有错误,并统计错误比特数
+  // 检查单帧是否有错误
   const checkFrameError = (receivedHex) => {
     const sentHex = sentDataHex.value
     if (!sentHex) return false
@@ -722,7 +750,6 @@
     let frameErrorBits = 0
     const minLength = Math.min(sentHex.length, receivedHex.length)
 
-    // 逐字节比较
     for (let i = 0; i < minLength; i += 2) {
       const sentByte = parseInt(sentHex.substr(i, 2), 16)
       const recvByte = parseInt(receivedHex.substr(i, 2), 16)
@@ -733,14 +760,11 @@
       }
     }
 
-    // 长度不同也算错误
     const lengthDiff = Math.abs(sentHex.length - receivedHex.length)
     frameErrorBits += lengthDiff * 4
 
-    // 累加总错误比特数
     berStats.errorBits += frameErrorBits
 
-    // 只要有1个bit错误,这一帧就是错误帧
     return frameErrorBits > 0
   }
 
@@ -754,7 +778,7 @@
     return count
   }
 
-  // 连接 SSE
+  // 连接SSE
   const connectSSE = () => {
     if (eventSource) {
       eventSource.close()
@@ -786,7 +810,6 @@
       sseConnected.value = false
       console.error('❌ SSE 连接错误')
 
-      // 5秒后重连
       setTimeout(() => {
         if (!sseConnected.value) {
           console.log('🔄 尝试重新连接SSE...')
@@ -804,105 +827,23 @@
 
   // 组件挂载
   onMounted(() => {
+    console.log('🎬 ResultDisplay mounted')
     connectSSE()
   })
 
-  // 组件卸载
+  // 组件卸载 - 重要！！！
   onUnmounted(() => {
+    console.log('🛑 ResultDisplay unmounting, 清理资源')
+
+    // 强制停止发送
+    stopAutoSend()
+
+    // 关闭SSE
     if (eventSource) {
       eventSource.close()
       eventSource = null
       console.log('⏹️ SSE 连接已关闭')
     }
-  })
-
-  // 发送控制
-  const sendInterval = ref(1)  // 发送间隔(秒)
-  const sendCount = ref(0)     // 发送计数
-  const isSending = ref(false) // 是否正在循环发送
-  let sendTimer = null         // 发送定时器
-
-  // 发送一次
-  const sendOnce = async () => {
-    if (!fileHexData.value) {
-      alert('请先选择文件')
-      return
-    }
-
-    if (!sseConnected.value) {
-      alert('SSE未连接,请等待连接成功')
-      return
-    }
-
-    try {
-      sendCount.value++  // 计数+1 (1-255循环)
-      if (sendCount.value > 255) {
-        sendCount.value = 1
-      }
-
-      const response = await axios.post(`${API_BASE}/lora/send`, {
-        timing_enable: 0,
-        timing_time: 0,
-        data_content: fileHexData.value,  // 实际数据(不含计数)
-        frame_count: sendCount.value      // 帧计数会自动加到数据前面
-      })
-
-      if (response.data.success) {
-        sentDataHex.value = fileHexData.value
-
-        sendStatus.value = {
-          type: 'success',
-          message: `✅ 发送成功 (帧#${sendCount.value})`
-        }
-
-        console.log(`✅ LoRa发送成功, 帧计数=${sendCount.value}`)
-      }
-    } catch (error) {
-      sendStatus.value = {
-        type: 'error',
-        message: `❌ 发送失败: ${error.response?.data?.detail || error.message}`
-      }
-      console.error('发送失败:', error)
-    }
-  }
-
-  // 开始循环发送
-  const startAutoSend = () => {
-    if (!fileHexData.value || !sseConnected.value) {
-      return
-    }
-
-    // 清零统计
-    clearStats()
-    sendCount.value = 0
-
-    isSending.value = true
-
-    // 立即发送第一次
-    sendOnce()
-
-    // 启动定时器
-    sendTimer = setInterval(() => {
-      sendOnce()
-    }, sendInterval.value * 1000)
-
-    console.log(`🔄 开始循环发送, 间隔=${sendInterval.value}秒`)
-  }
-
-  // 停止循环发送
-  const stopAutoSend = () => {
-    if (sendTimer) {
-      clearInterval(sendTimer)
-      sendTimer = null
-    }
-
-    isSending.value = false
-    console.log('⏹️ 停止循环发送')
-  }
-
-  // 组件卸载时停止发送
-  onUnmounted(() => {
-    stopAutoSend()
   })
 </script>
 
@@ -1650,15 +1591,6 @@
       margin-bottom: 10px;
     }
 
-    .lost-badge {
-      background: #dc3545;
-      color: white;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 11px;
-      margin-left: 8px;
-    }
-
     .receive-item.frame-lost {
       background: #fff5f5;
       border-left: 3px solid #dc3545;
@@ -1745,24 +1677,6 @@
     .receive-item.frame-error {
       background: #fff8e5;
       border-left: 3px solid #ffc107;
-    }
-
-    .error-badge {
-      background: #ffc107;
-      color: #856404;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 11px;
-      margin-left: 8px;
-    }
-
-    .correct-badge {
-      background: #28a745;
-      color: white;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 11px;
-      margin-left: 8px;
     }
 
     .frame-error .data-hex {
@@ -1925,5 +1839,87 @@
       font-size: 13px;
       color: #856404;
       font-weight: 500;
+    }
+
+    .no-file-warning {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 20px;
+      background: #fff3cd;
+      border: 2px solid #ffc107;
+      border-radius: 8px;
+      color: #856404;
+      font-weight: 500;
+      font-size: 16px;
+      margin-bottom: 20px;
+    }
+
+    .selected-file-info {
+      background: #e3f2fd;
+      border: 2px solid #2196f3;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .file-badge {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px;
+      background: white;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      font-weight: 500;
+    }
+
+    .file-size {
+      color: #6c757d;
+      font-size: 14px;
+    }
+
+    /* 接收数据颜色优化 */
+    .receive-item {
+      background: white;
+      border: 1px solid #e9ecef;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 10px;
+      display: grid;
+      grid-template-columns: 100px 120px 1fr;
+      gap: 15px;
+      align-items: center;
+      transition: all 0.3s ease;
+    }
+
+      .receive-item.frame-correct {
+        border-left: 4px solid #28a745;
+        background: #f8fff9;
+      }
+
+      .receive-item.frame-error {
+        border-left: 4px solid #ffc107;
+        background: #fffef8;
+      }
+
+      .receive-item.frame-lost {
+        border-left: 4px solid #dc3545;
+        background: #fff5f5;
+      }
+
+    .frame-num-correct {
+      color: #28a745;
+      font-weight: 700;
+    }
+
+    .frame-num-error {
+      color: #ffc107;
+      font-weight: 700;
+    }
+
+    .frame-num-lost {
+      color: #dc3545;
+      font-weight: 700;
     }
 </style>
