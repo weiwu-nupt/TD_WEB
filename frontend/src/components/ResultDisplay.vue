@@ -37,7 +37,7 @@
             <!-- 误码率指标 -->
             <div v-if="tab.id === 'ber'" class="result-section">
 
-              <!-- 文件读取和发送区域 -->
+              <!-- 文件发送区域 -->
               <div class="file-sender-section">
                 <div class="file-sender-header">
                   <i>📡</i>
@@ -55,26 +55,83 @@
                       <i>📂</i>
                       <span>{{ selectedFileName || '选择16进制TXT文件' }}</span>
                     </label>
-                    <button class="send-lora-btn"
-                            @click="sendLoraData"
-                            :disabled="!fileHexData || !sseConnected">
-                      <i>📤</i>
-                      发送LoRa
-                    </button>
                   </div>
 
-                  <!-- 文件内容预览 -->
+                  <!-- 说明提示 -->
+                  <div class="info-tip">
+                    <i>ℹ️</i>
+                    <span>发送格式: 帧计数(1字节) + 文件数据,回传时也会包含帧计数</span>
+                  </div>
+
+                  <!-- 发送控制 -->
+                  <div class="send-controls">
+                    <div class="control-group">
+                      <label>发送间隔 (秒):</label>
+                      <input type="number"
+                             v-model.number="sendInterval"
+                             min="0.1"
+                             step="0.1"
+                             class="interval-input" />
+                    </div>
+
+                    <div class="control-buttons">
+                      <button class="send-once-btn"
+                              @click="sendOnce"
+                              :disabled="!fileHexData || !sseConnected">
+                        <i>📤</i>
+                        发送一次
+                      </button>
+
+                      <button v-if="!isSending"
+                              class="send-auto-btn"
+                              @click="startAutoSend"
+                              :disabled="!fileHexData || !sseConnected">
+                        <i>▶️</i>
+                        开始循环
+                      </button>
+
+                      <button v-else
+                              class="stop-btn"
+                              @click="stopAutoSend">
+                        <i>⏸️</i>
+                        暂停
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- 发送状态 -->
+                  <div class="send-status-box">
+                    <div class="status-item">
+                      <span class="status-label">发送计数:</span>
+                      <span class="status-value">{{ sendCount }}</span>
+                    </div>
+                    <div class="status-item">
+                      <span class="status-label">已发送:</span>
+                      <span class="status-value">{{ sendCount }} 帧</span>
+                    </div>
+                    <div class="status-item">
+                      <span class="status-label">发送状态:</span>
+                      <span class="status-value" :class="{ sending: isSending }">
+                        {{ isSending ? '🔄 循环发送中...' : '⏹️ 已停止' }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- 文件预览 -->
                   <div v-if="fileHexData" class="file-preview">
                     <div class="preview-header">
-                      <span>数据预览 (16进制)</span>
+                      <span>数据预览 (不含帧计数)</span>
                       <span class="data-length">{{ fileHexData.length / 2 }} 字节</span>
                     </div>
                     <div class="preview-content">
                       {{ formatHexPreview(fileHexData) }}
                     </div>
+                    <div class="preview-note">
+                      实际发送: [帧计数 1字节] + {{ fileHexData.length / 2 }} 字节数据
+                    </div>
                   </div>
 
-                  <!-- 发送状态 -->
+                  <!-- 操作提示 -->
                   <div v-if="sendStatus" class="send-status" :class="sendStatus.type">
                     <i>{{ sendStatus.type === 'success' ? '✅' : '❌' }}</i>
                     {{ sendStatus.message }}
@@ -108,7 +165,7 @@
                       <span v-else class="correct-badge">正确</span>
                     </div>
                     <div class="receive-data">
-                      <span class="data-label">数据:</span>
+                      <span class="data-label">数据(不含计数):</span>
                       <span class="data-hex">{{ msg.data_hex }}</span>
                     </div>
                     <div class="receive-stats">
@@ -422,7 +479,7 @@
 </template>
 
 <script setup>
-  import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+  import { ref, reactive, onMounted, onUnmounted } from 'vue'
   import axios from 'axios'
 
   const API_BASE = '/api'
@@ -757,6 +814,95 @@
       eventSource = null
       console.log('⏹️ SSE 连接已关闭')
     }
+  })
+
+  // 发送控制
+  const sendInterval = ref(1)  // 发送间隔(秒)
+  const sendCount = ref(0)     // 发送计数
+  const isSending = ref(false) // 是否正在循环发送
+  let sendTimer = null         // 发送定时器
+
+  // 发送一次
+  const sendOnce = async () => {
+    if (!fileHexData.value) {
+      alert('请先选择文件')
+      return
+    }
+
+    if (!sseConnected.value) {
+      alert('SSE未连接,请等待连接成功')
+      return
+    }
+
+    try {
+      sendCount.value++  // 计数+1 (1-255循环)
+      if (sendCount.value > 255) {
+        sendCount.value = 1
+      }
+
+      const response = await axios.post(`${API_BASE}/lora/send`, {
+        timing_enable: 0,
+        timing_time: 0,
+        data_content: fileHexData.value,  // 实际数据(不含计数)
+        frame_count: sendCount.value      // 帧计数会自动加到数据前面
+      })
+
+      if (response.data.success) {
+        sentDataHex.value = fileHexData.value
+
+        sendStatus.value = {
+          type: 'success',
+          message: `✅ 发送成功 (帧#${sendCount.value})`
+        }
+
+        console.log(`✅ LoRa发送成功, 帧计数=${sendCount.value}`)
+      }
+    } catch (error) {
+      sendStatus.value = {
+        type: 'error',
+        message: `❌ 发送失败: ${error.response?.data?.detail || error.message}`
+      }
+      console.error('发送失败:', error)
+    }
+  }
+
+  // 开始循环发送
+  const startAutoSend = () => {
+    if (!fileHexData.value || !sseConnected.value) {
+      return
+    }
+
+    // 清零统计
+    clearStats()
+    sendCount.value = 0
+
+    isSending.value = true
+
+    // 立即发送第一次
+    sendOnce()
+
+    // 启动定时器
+    sendTimer = setInterval(() => {
+      sendOnce()
+    }, sendInterval.value * 1000)
+
+    console.log(`🔄 开始循环发送, 间隔=${sendInterval.value}秒`)
+  }
+
+  // 停止循环发送
+  const stopAutoSend = () => {
+    if (sendTimer) {
+      clearInterval(sendTimer)
+      sendTimer = null
+    }
+
+    isSending.value = false
+    console.log('⏹️ 停止循环发送')
+  }
+
+  // 组件卸载时停止发送
+  onUnmounted(() => {
+    stopAutoSend()
   })
 </script>
 
@@ -1621,5 +1767,163 @@
 
     .frame-error .data-hex {
       color: #856404;
+    }
+    .send-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 8px;
+    }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+      .control-group label {
+        font-weight: 600;
+        color: #2c3e50;
+        min-width: 120px;
+      }
+
+    .interval-input {
+      width: 120px;
+      padding: 8px 12px;
+      border: 2px solid #e9ecef;
+      border-radius: 6px;
+      font-size: 16px;
+    }
+
+      .interval-input:focus {
+        outline: none;
+        border-color: #007bff;
+      }
+
+    .control-buttons {
+      display: flex;
+      gap: 10px;
+    }
+
+    .send-once-btn,
+    .send-auto-btn,
+    .stop-btn {
+      flex: 1;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .send-once-btn {
+      background: #17a2b8;
+      color: white;
+    }
+
+      .send-once-btn:hover:not(:disabled) {
+        background: #138496;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(23, 162, 184, 0.3);
+      }
+
+    .send-auto-btn {
+      background: #28a745;
+      color: white;
+    }
+
+      .send-auto-btn:hover:not(:disabled) {
+        background: #218838;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+      }
+
+    .stop-btn {
+      background: #dc3545;
+      color: white;
+    }
+
+      .stop-btn:hover {
+        background: #c82333;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+      }
+
+    .send-once-btn:disabled,
+    .send-auto-btn:disabled {
+      background: #6c757d;
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
+    .send-status-box {
+      display: flex;
+      gap: 20px;
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      border: 2px solid #e9ecef;
+    }
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .status-label {
+      font-weight: 600;
+      color: #6c757d;
+    }
+
+    .status-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: #2c3e50;
+    }
+
+      .status-value.sending {
+        color: #28a745;
+        animation: pulse 1.5s infinite;
+      }
+
+    @keyframes pulse {
+      0%, 100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.6;
+      }
+    }
+
+    .info-tip {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      background: #e3f2fd;
+      border-left: 4px solid #2196f3;
+      border-radius: 4px;
+      font-size: 14px;
+      color: #1565c0;
+    }
+
+    .preview-note {
+      margin-top: 10px;
+      padding: 8px 12px;
+      background: #fff3cd;
+      border-radius: 4px;
+      font-size: 13px;
+      color: #856404;
+      font-weight: 500;
     }
 </style>

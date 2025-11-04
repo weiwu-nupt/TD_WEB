@@ -20,6 +20,13 @@ class ChannelParameters(BaseModel):
     coding: str                 # 编码(4/5, 4/6, 4/7, 4/8)
     spreading_factor: int       # 扩频因子(6-12)
 
+class WriteParametersRequest(BaseModel):
+    """写入参数请求"""
+    uplink: ChannelParameters
+    uplink_interference: ChannelParameters
+    downlink: ChannelParameters
+    lora_data_length: int  # LoRa数据长度(字节)
+
 class AllChannelParameters(BaseModel):
     """所有通道参数"""
     uplink: ChannelParameters

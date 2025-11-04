@@ -35,7 +35,10 @@ async def lora_send_message(msg: LoRaSendMessage):
         if success:
             return {
                 "success": True,
-                "message": "LoRa消息发送成功"
+                "message": "LoRa消息发送成功",
+                "details": {
+                    "frame_count": msg.frame_count
+                }
             }
         else:
             raise HTTPException(status_code=500, detail="LoRa消息发送失败")

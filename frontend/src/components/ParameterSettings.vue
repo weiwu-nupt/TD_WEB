@@ -6,6 +6,37 @@
     </div>
 
     <div class="tab-content">
+      <!-- LoRa数据文件选择 -->
+      <div class="file-section">
+        <div class="file-header">
+          <i>📄</i>
+          <h3>LoRa传输文件</h3>
+        </div>
+        <div class="file-content">
+          <input type="file"
+                 ref="loraFileInput"
+                 @change="handleLoraFileSelect"
+                 accept=".txt"
+                 class="file-input"
+                 id="loraFileInput" />
+          <label for="loraFileInput" class="file-label">
+            <i>📂</i>
+            <span>{{ loraFileName || '选择16进制TXT文件' }}</span>
+          </label>
+
+          <div v-if="loraFileData" class="file-info">
+            <div class="info-item">
+              <span class="info-label">文件大小:</span>
+              <span class="info-value">{{ loraFileData.length / 2 }} 字节</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">数据预览:</span>
+              <span class="info-value preview-hex">{{ formatHexPreview(loraFileData) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- 循环显示所有通道 -->
       <div v-for="tab in paramTabs" :key="tab.id" class="channel-card">
         <div class="channel-header">
@@ -57,19 +88,31 @@
         <button class="read-button" @click="readParameters">
           📥 读取
         </button>
-        <button class="write-button" @click="writeParameters">
+        <button class="write-button"
+                @click="writeParameters"
+                :disabled="!loraFileData">
           📤 写入
         </button>
+      </div>
+
+      <!-- 写入提示 -->
+      <div v-if="!loraFileData" class="warning-tip">
+        ⚠️ 请先选择LoRa传输文件再写入参数
       </div>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
-  import { reactive } from 'vue'
+  import { ref, reactive } from 'vue'
   import axios from 'axios'
 
   const API_BASE = '/api'
+
+  // LoRa文件相关
+  const loraFileInput = ref(null)
+  const loraFileName = ref('')
+  const loraFileData = ref('')
 
   const paramTabs = reactive([
     {
@@ -77,17 +120,9 @@
       name: '上行通道',
       icon: '📡',
       fields: [
+        { label: '带宽', type: 'bandwidth', value: 125, key: 'bandwidth' },
         {
-          label: '带宽',
-          type: 'bandwidth',
-          value: 125,
-          key: 'bandwidth'
-        },
-        {
-          label: '编码',
-          type: 'select',
-          value: '4/5',
-          key: 'coding',
+          label: '编码', type: 'select', value: '4/5', key: 'coding',
           options: [
             { label: '4/5', value: '4/5' },
             { label: '4/6', value: '4/6' },
@@ -95,15 +130,7 @@
             { label: '4/8', value: '4/8' }
           ]
         },
-        {
-          label: '扩频因子',
-          type: 'number',
-          value: 9,
-          min: 6,
-          max: 12,
-          placeholder: '6-12',
-          key: 'spreading_factor'
-        }
+        { label: '扩频因子', type: 'number', value: 9, min: 6, max: 12, placeholder: '6-12', key: 'spreading_factor' }
       ]
     },
     {
@@ -111,17 +138,9 @@
       name: '上行通道(干扰)',
       icon: '📡⚡',
       fields: [
+        { label: '带宽', type: 'bandwidth', value: 125, key: 'bandwidth' },
         {
-          label: '带宽',
-          type: 'bandwidth',
-          value: 125,
-          key: 'bandwidth'
-        },
-        {
-          label: '编码',
-          type: 'select',
-          value: '4/6',
-          key: 'coding',
+          label: '编码', type: 'select', value: '4/6', key: 'coding',
           options: [
             { label: '4/5', value: '4/5' },
             { label: '4/6', value: '4/6' },
@@ -129,15 +148,7 @@
             { label: '4/8', value: '4/8' }
           ]
         },
-        {
-          label: '扩频因子',
-          type: 'number',
-          value: 8,
-          min: 6,
-          max: 12,
-          placeholder: '6-12',
-          key: 'spreading_factor'
-        }
+        { label: '扩频因子', type: 'number', value: 8, min: 6, max: 12, placeholder: '6-12', key: 'spreading_factor' }
       ]
     },
     {
@@ -145,34 +156,53 @@
       name: '下行通道',
       icon: '📶',
       fields: [
+        { label: '带宽', type: 'bandwidth', value: 125, key: 'bandwidth' },
         {
-          label: '带宽',
-          type: 'bandwidth',
-          value: 125,
-          key: 'bandwidth'
-        },
-        {
-          label: '编码',
-          type: 'select',
-          value: '4/5',
-          key: 'coding',
+          label: '编码', type: 'select', value: '4/5', key: 'coding',
           options: [
             { label: '4/5', value: '4/5' },
             { label: '4/6', value: '4/6' }
           ]
         },
-        {
-          label: '扩频因子',
-          type: 'number',
-          value: 10,
-          min: 6,
-          max: 12,
-          placeholder: '6-12',
-          key: 'spreading_factor'
-        }
+        { label: '扩频因子', type: 'number', value: 10, min: 6, max: 12, placeholder: '6-12', key: 'spreading_factor' }
       ]
     }
   ])
+
+  // 处理LoRa文件选择
+  const handleLoraFileSelect = async (event) => {
+    const file = event.target.files[0]
+    if (!file) return
+
+    loraFileName.value = file.name
+
+    try {
+      const text = await file.text()
+      const cleanHex = text.replace(/\s/g, '').toUpperCase()
+      const hexPattern = /^[0-9A-F]+$/
+
+      if (!hexPattern.test(cleanHex)) {
+        throw new Error('文件内容包含非16进制字符')
+      }
+
+      if (cleanHex.length % 2 !== 0) {
+        throw new Error('16进制数据长度必须是偶数')
+      }
+
+      loraFileData.value = cleanHex
+      console.log(`✅ LoRa文件读取成功: ${cleanHex.length / 2} 字节`)
+      alert(`✅ LoRa文件读取成功 (${cleanHex.length / 2} 字节)`)
+    } catch (error) {
+      loraFileData.value = ''
+      console.error('文件读取失败:', error)
+      alert(`❌ ${error.message}`)
+    }
+  }
+
+  // 格式化16进制预览
+  const formatHexPreview = (hex) => {
+    return hex.length > 40 ? hex.substring(0, 40) + '...' : hex
+  }
 
   // 读取参数
   const readParameters = async () => {
@@ -182,7 +212,6 @@
       if (response.data.success) {
         const data = response.data.data
 
-        // 更新界面
         paramTabs.forEach(tab => {
           const channelData = data[tab.id]
           if (channelData) {
@@ -207,9 +236,16 @@
 
   // 写入参数
   const writeParameters = async () => {
+    if (!loraFileData.value) {
+      alert('❌ 请先选择LoRa传输文件')
+      return
+    }
+
     try {
       // 构建参数对象
-      const params = {}
+      const params = {
+        lora_data_length: loraFileData.value.length / 2  // 字节数
+      }
 
       paramTabs.forEach(tab => {
         params[tab.id] = {}
@@ -305,7 +341,6 @@
       font-size: 18px;
       font-weight: 600;
     }
-
 
   .form-grid {
     display: grid;
@@ -411,4 +446,118 @@
       justify-content: center;
     }
   }
+
+  .file-section {
+    background: #e3f2fd;
+    border: 2px solid #2196f3;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 25px;
+  }
+
+  .file-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #2196f3;
+  }
+
+    .file-header i {
+      font-size: 24px;
+    }
+
+    .file-header h3 {
+      margin: 0;
+      color: #1976d2;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+  .file-content {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .file-input {
+    display: none;
+  }
+
+  .file-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 24px;
+    background: white;
+    border: 2px solid #2196f3;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 500;
+    color: #1976d2;
+  }
+
+    .file-label:hover {
+      background: #2196f3;
+      color: white;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+    }
+
+  .file-info {
+    background: white;
+    border-radius: 8px;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .info-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .info-label {
+    font-weight: 600;
+    color: #1976d2;
+    min-width: 80px;
+  }
+
+  .info-value {
+    color: #424242;
+  }
+
+  .preview-hex {
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    background: #f5f5f5;
+    padding: 4px 8px;
+    border-radius: 4px;
+  }
+
+  .warning-tip {
+    padding: 12px 20px;
+    background: #fff3cd;
+    border: 2px solid #ffc107;
+    border-radius: 8px;
+    color: #856404;
+    font-weight: 500;
+    text-align: center;
+  }
+
+  .write-button:disabled {
+    background: #9e9e9e;
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+    .write-button:disabled:hover {
+      background: #9e9e9e;
+      transform: none;
+      box-shadow: none;
+    }
 </style>

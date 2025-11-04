@@ -145,7 +145,7 @@ def process_lora_frame(parsed_msg: dict, addr: tuple) -> dict:
             
         receive_timestamp = struct.unpack('>I', message_content[0:4])[0]
         complete_timestamp = struct.unpack('>I', message_content[4:8])[0]
-        frame_count = message_content[9]  # 帧计数
+        frame_count = message_content[8]  # 帧计数
         data_bytes = message_content[9:]
         data_hex = data_bytes.hex().upper()
             

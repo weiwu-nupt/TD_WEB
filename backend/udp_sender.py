@@ -87,22 +87,25 @@ class UDPSender:
         timing_enable: int,
         timing_time: int,
         data_content: str,
+        frame_count: int = 0,
         target_ip: str = "127.0.0.1",
         target_port: int = 9100
     ) -> bool:
         """发送LoRa消息帧"""
         try:
-            # 验证data_content是否为有效的16进制字符串
-            try:
-                data_bytes = bytes.fromhex(data_content)
-            except ValueError as e:
-                raise ValueError(f"data_content必须是有效的16进制字符串: {e}")
+            # 解析实际数据
+            actual_data_bytes = bytes.fromhex(data_content)
+        
+            # 构建 data = frame_count(1) + 实际数据
+            data_with_count = struct.pack('B', frame_count) + actual_data_bytes
+            data_length = len(data_with_count)
 
-            # 构建消息内容: timing_enable(1) + timing_time(4) + data_bytes(n)
-            message_content = struct.pack('B', timing_enable)
-            message_content += struct.pack('>I', timing_time)
-            message_content += data_bytes
-            
+            # timing_enable(1) + timing_time(4) + data_length(2) + data
+            message_content = struct.pack('B', timing_enable)       # 定时使能(1字节)
+            message_content += struct.pack('>I', timing_time)       # 定时时间(4字节,大端序)
+            message_content += struct.pack('>H', data_length)       # data长度(2字节,大端序)
+            message_content += data_with_count                      # data = frame_count + 实际数据
+
             # 构建完整消息
             full_message = build_message(FRAME_TYPE_LORA, message_content)
             
