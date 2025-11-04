@@ -20,18 +20,12 @@ class ChannelParameters(BaseModel):
     coding: str                 # 编码(4/5, 4/6, 4/7, 4/8)
     spreading_factor: int       # 扩频因子(6-12)
 
-class WriteParametersRequest(BaseModel):
-    """写入参数请求"""
-    uplink: ChannelParameters
-    uplink_interference: ChannelParameters
-    downlink: ChannelParameters
-    lora_data_length: int  # LoRa数据长度(字节)
-
 class AllChannelParameters(BaseModel):
     """所有通道参数"""
     uplink: ChannelParameters
     uplink_interference: ChannelParameters
     downlink: ChannelParameters
+    lora_data_length: int  # LoRa数据长度(字节)
 
 # 多普勒设置模型
 class DopplerSettings(BaseModel):
@@ -58,3 +52,4 @@ class LoRaSendMessage(BaseModel):
     timing_enable: int   # 0-不定时, 1-定时开启
     timing_time: int     # 定时时间 (4字节)
     data_content: str    # 数据内容
+    frame_count: int 

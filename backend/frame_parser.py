@@ -95,9 +95,9 @@ def parse_message(data: bytes) -> Optional[dict]:
         calculated_crc = calculate_crc16(crc_data)
         
         # 8. 校验CRC
-        crc_valid = (received_crc == calculated_crc)
-        if not crc_valid:
-            logger.warning(f"CRC校验失败: 接收0x{received_crc:04X}, 计算0x{calculated_crc:04X}")
+        # crc_valid = (received_crc == calculated_crc)
+        # if not crc_valid:
+        #     logger.warning(f"CRC校验失败: 接收0x{received_crc:04X}, 计算0x{calculated_crc:04X}")
         
         return {
             "message_type": message_type,

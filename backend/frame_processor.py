@@ -153,11 +153,11 @@ def process_lora_frame(parsed_msg: dict, addr: tuple) -> dict:
             
         processed_data = {
             "frame_name": "LoRa接收帧",
+            "message_type": 0x07,
             "lora_receive_info": {
                 "frame_count": frame_count,
                 "duration_ms": duration,
-                "data_content": data_hex,
-                "content_length": len(data_bytes)
+                "data_content": data_hex
             }
         }
         

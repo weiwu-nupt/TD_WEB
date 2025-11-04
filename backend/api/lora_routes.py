@@ -57,7 +57,6 @@ async def lora_receive_stream():
         from udp_receiver import get_message_queue
         
         message_queue = get_message_queue()
-        last_checked_count = 0
         
         # 发送初始连接消息
         yield f"data: {json.dumps({'type': 'connected', 'message': 'SSE连接成功'})}\n\n"
@@ -65,38 +64,29 @@ async def lora_receive_stream():
         
         try:
             while True:
-                current_count = len(message_queue)
-                
-                # 检查是否有新消息
-                if current_count > last_checked_count:
-                    # 获取新消息
-                    new_messages = list(message_queue)[last_checked_count:]
+                # 检查队列是否有消息
+                if len(message_queue) > 0:
+                    # 从队列中取出第一条消息（pop）
+                    msg = message_queue.popleft()
                     
-                    for msg in new_messages:
-                        # 只推送LoRa接收消息
-                        if msg.get("message_type") == 0x07 and "lora_receive_info" in msg:
-                            lora_info = msg["lora_receive_info"]
-                            
-                            event_data = {
-                                "type": "lora_receive",
-                                "data": {
-                                    "receive_time": msg.get("receive_time"),
-                                    "frame_count": lora_info.get("frame_count", 0),
-                                    "receive_timestamp": lora_info["receive_timestamp"],
-                                    "complete_timestamp": lora_info["complete_timestamp"],
-                                    "duration_ms": lora_info["duration_ms"],
-                                    "data_hex": lora_info["data_hex"],
-                                    "data_bytes": lora_info["data_bytes"]
-                                }
+                    # 只推送LoRa接收消息
+                    if msg.get("message_type") == 0x07 and "lora_receive_info" in msg:
+                        lora_info = msg["lora_receive_info"]
+                        
+                        event_data = {
+                            "type": "lora_receive",
+                            "data": {
+                                "frame_count": lora_info.get("frame_count", 0),
+                                "duration_ms": lora_info["duration_ms"],
+                                "data_hex": lora_info["data_content"]
                             }
-                            
-                            yield f"data: {json.dumps(event_data)}\n\n"
-                            logger.info(f"SSE推送LoRa接收消息: 帧#{lora_info.get('frame_count', 0)}")
-                    
-                    last_checked_count = current_count
+                        }
+                        
+                        yield f"data: {json.dumps(event_data)}\n\n"
+                        logger.info(f"SSE推送LoRa接收消息: 帧#{lora_info.get('frame_count', 0)}")
                 
-                # 每300ms检查一次
-                await asyncio.sleep(0.3)
+                # 每100ms检查一次（更快响应）
+                await asyncio.sleep(0.1)
                 
         except asyncio.CancelledError:
             logger.info("SSE客户端断开连接")
@@ -111,6 +101,6 @@ async def lora_receive_stream():
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",  # 禁用nginx缓冲
+            "X-Accel-Buffering": "no",
         }
     )

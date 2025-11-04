@@ -67,7 +67,7 @@ def build_uplink_registers(bandwidth: int, sf: int, coding: str, data_length: in
     #     (coding_rate << 21)  # bit 23:21: 编码速率
     # )
 
-    reg2 = ((data_length+1) << 24) + ((coding_rate+1) << 21) + (1 << 20) + (base_sf << 4) + 0x1000D
+    reg2 = ((data_length+1) << 24) + ((coding_rate+1) << 21) + (1 << 20) + (base_sf << 4) + 0x1000F
 
     
     return reg1, reg2

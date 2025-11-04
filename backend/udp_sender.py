@@ -98,12 +98,10 @@ class UDPSender:
         
             # 构建 data = frame_count(1) + 实际数据
             data_with_count = struct.pack('B', frame_count) + actual_data_bytes
-            data_length = len(data_with_count)
 
             # timing_enable(1) + timing_time(4) + data_length(2) + data
             message_content = struct.pack('B', timing_enable)       # 定时使能(1字节)
             message_content += struct.pack('>I', timing_time)       # 定时时间(4字节,大端序)
-            message_content += struct.pack('>H', data_length)       # data长度(2字节,大端序)
             message_content += data_with_count                      # data = frame_count + 实际数据
 
             # 构建完整消息

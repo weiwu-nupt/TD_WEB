@@ -34,7 +34,7 @@ class UDPReceiver:
             # 创建UDP socket
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self.socket.bind(local_ip, port)
+            self.socket.bind((local_ip, port))
             self.socket.settimeout(1.0)  # 1秒超时
             
             self.running = True
@@ -96,7 +96,8 @@ class UDPReceiver:
                 # result["direction"] = "receive"
                 
                 # 添加到消息队列
-                message_queue.append(result)
+                if result["message_type"] == 0x07:
+                    message_queue.append(result)
                 
                 # 通知等待的请求
                 # ResponseWaiter.notify_response(result["message_type"], result)
