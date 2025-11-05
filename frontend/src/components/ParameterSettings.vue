@@ -46,11 +46,11 @@
 
         <div class="form-grid">
           <div class="form-group">
-            <label>带宽</label>
+            <label>带宽 (kHz)</label>
             <select v-model.number="paramTabs.uplink.bandwidth" class="select-field">
-              <option :value="125">125 kHz</option>
-              <option :value="250">250 kHz</option>
-              <option :value="500">500 kHz</option>
+              <option :value="125">125</option>
+              <option :value="250">250</option>
+              <option :value="500">500</option>
             </select>
           </div>
 
@@ -74,17 +74,25 @@
                    class="input-field" />
           </div>
 
-          <!-- 射频频率 -->
+          <!-- 🔧 新增：射频频率 -->
           <div class="form-group">
-            <label>射频频率</label>
-            <div class="input-with-unit">
-              <input type="number"
-                     v-model.number="paramTabs.uplink.rf_frequency"
-                     placeholder="470000"
-                     step="1"
-                     class="input-field" />
-              <span class="unit-label">kHz</span>
-            </div>
+            <label>射频频率 (kHz)</label>
+            <input type="number"
+                   v-model.number="paramTabs.uplink.rf_frequency"
+                   placeholder="900000"
+                   step="1"
+                   class="input-field" />
+          </div>
+
+          <!-- 🔧 新增：衰减 -->
+          <div class="form-group">
+            <label>衰减 (dB)</label>
+            <input type="number"
+                   v-model.number="paramTabs.uplink.attenuation"
+                   placeholder="1-70"
+                   min="1"
+                   max="70"
+                   class="input-field" />
           </div>
         </div>
       </div>
@@ -126,39 +134,30 @@
           <!-- 单音噪声参数 -->
           <div v-if="interferenceSettings.type === 'single_tone'" class="form-grid">
             <div class="form-group">
-              <label>中心频率</label>
-              <div class="input-with-unit">
-                <input type="number"
-                       v-model.number="interferenceSettings.center_frequency"
-                       placeholder="0"
-                       class="input-field" />
-                <span class="unit-label">Hz</span>
-              </div>
+              <label>中心频率 (Hz)</label>
+              <input type="number"
+                     v-model.number="interferenceSettings.center_frequency"
+                     placeholder="0"
+                     class="input-field" />
             </div>
 
             <div class="form-group">
-              <label>噪声功率</label>
-              <div class="input-with-unit">
-                <input type="number"
-                       v-model.number="interferenceSettings.power"
-                       placeholder="0"
-                       class="input-field" />
-                <span class="unit-label">dBm</span>
-              </div>
+              <label>噪声功率 (dBm)</label>
+              <input type="number"
+                     v-model.number="interferenceSettings.power"
+                     placeholder="0"
+                     class="input-field" />
             </div>
           </div>
 
           <!-- 底噪参数 -->
           <div v-else-if="interferenceSettings.type === 'low_noise'" class="form-grid">
             <div class="form-group">
-              <label>噪声功率</label>
-              <div class="input-with-unit">
-                <input type="number"
-                       v-model.number="interferenceSettings.power"
-                       placeholder="0"
-                       class="input-field" />
-                <span class="unit-label">dBm</span>
-              </div>
+              <label>噪声功率 (dBm)</label>
+              <input type="number"
+                     v-model.number="interferenceSettings.power"
+                     placeholder="0"
+                     class="input-field" />
             </div>
           </div>
 
@@ -175,25 +174,22 @@
             </div>
 
             <div class="form-group">
-              <label>噪声功率</label>
-              <div class="input-with-unit">
-                <input type="number"
-                       v-model.number="interferenceSettings.power"
-                       placeholder="0"
-                       class="input-field" />
-                <span class="unit-label">dBm</span>
-              </div>
+              <label>噪声功率 (dBm)</label>
+              <input type="number"
+                     v-model.number="interferenceSettings.power"
+                     placeholder="0"
+                     class="input-field" />
             </div>
           </div>
 
           <!-- 独立通道参数（仅在独立通道模式下显示）-->
           <div v-if="interferenceSettings.mode === 'independent'" class="form-grid">
             <div class="form-group">
-              <label>带宽</label>
+              <label>带宽 (kHz)</label>
               <select v-model.number="paramTabs.uplink_interference.bandwidth" class="select-field">
-                <option :value="125">125 kHz</option>
-                <option :value="250">250 kHz</option>
-                <option :value="500">500 kHz</option>
+                <option :value="125">125</option>
+                <option :value="250">250</option>
+                <option :value="500">500</option>
               </select>
             </div>
 
@@ -229,11 +225,11 @@
 
         <div class="form-grid">
           <div class="form-group">
-            <label>带宽</label>
+            <label>带宽 (kHz)</label>
             <select v-model.number="paramTabs.downlink.bandwidth" class="select-field">
-              <option :value="125">125 kHz</option>
-              <option :value="250">250 kHz</option>
-              <option :value="500">500 kHz</option>
+              <option :value="125">125</option>
+              <option :value="250">250</option>
+              <option :value="500">500</option>
             </select>
           </div>
 
@@ -300,14 +296,11 @@
 
         <!-- 线性变化率 -->
         <div v-if="dopplerSettings.type === 'linear'" class="form-group">
-          <label>变化率</label>
-          <div class="input-with-unit">
-            <input type="number"
-                   v-model.number="dopplerSettings.rate"
-                   placeholder="1000"
-                   class="input-field" />
-            <span class="unit-label">Hz/s</span>
-          </div>
+          <label>变化率 (Hz/s)</label>
+          <input type="number"
+                 v-model.number="dopplerSettings.rate"
+                 placeholder="10"
+                 class="input-field" />
         </div>
       </div>
 
@@ -350,7 +343,8 @@
       bandwidth: 500,
       coding: '4/5',
       spreading_factor: 10,
-      rf_frequency: 470000  // 🔧 新增：默认470000 kHz
+      rf_frequency: 900000,  // 🔧 默认900MHz = 900000kHz
+      attenuation: 10  // 🔧 新增：默认衰减10dB
     },
     downlink: {
       bandwidth: 500,
@@ -375,15 +369,6 @@
     frequencyMin: -10000,
     frequencyMax: 10000,
     rate: 1000
-  })
-
-  // 计算f_b (基带频率)
-  const f_b = computed(() => {
-    const bw = paramTabs.uplink.bandwidth
-    if (bw === 125) return 1e6
-    if (bw === 250) return 2e6
-    if (bw === 500) return 4e6
-    return 1e6
   })
 
   // 处理LoRa文件选择
@@ -432,14 +417,10 @@
       if (response.data.success) {
         const data = response.data.data
 
-        // 更新通道参数
         if (data.uplink) Object.assign(paramTabs.uplink, data.uplink)
+        if (data.uplink_interference) Object.assign(paramTabs.uplink_interference, data.uplink_interference)
         if (data.downlink) Object.assign(paramTabs.downlink, data.downlink)
-
-        // 更新干扰设置
         if (data.interference) Object.assign(interferenceSettings, data.interference)
-
-        // 更新多普勒设置
         if (data.doppler) Object.assign(dopplerSettings, data.doppler)
 
         console.log('参数读取成功:', data)
@@ -464,6 +445,7 @@
       const params = {
         lora_data_length: loraFileData.value.length / 2,
         uplink: paramTabs.uplink,
+        uplink_interference: paramTabs.uplink_interference,
         downlink: paramTabs.downlink,
         interference: interferenceSettings,
         doppler: dopplerSettings
@@ -485,7 +467,6 @@
     }
   }
 </script>
-
 <style scoped>
   .section {
     background: rgba(255, 255, 255, 0.95);

@@ -677,6 +677,7 @@
     receivedMessages.value = []
     sentDataHex.value = ''
     clearStats()
+    sendCount.value = 0
     sendStatus.value = { type: 'info', message: 'ℹ️ 数据已清空' }
   }
 
@@ -1815,9 +1816,9 @@
   .send-status-box {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 15px;
+    gap: 12px; /* 从15px改为12px */
     background: #f8f9fa;
-    padding: 20px;
+    padding: 15px; /* 从20px改为15px */
     border-radius: 10px;
     border: 2px solid #e9ecef;
   }
@@ -1825,21 +1826,16 @@
   .status-item {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 6px; /* 从8px改为6px */
     background: white;
-    padding: 15px;
+    padding: 12px; /* 从15px改为12px */
     border-radius: 8px;
     border-left: 4px solid #007bff;
     transition: all 0.3s ease;
   }
 
-    .status-item:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-    }
-
   .status-label {
-    font-size: 13px;
+    font-size: 12px; /* 从13px改为12px */
     font-weight: 600;
     color: #6c757d;
     text-transform: uppercase;
@@ -1847,7 +1843,7 @@
   }
 
   .status-value {
-    font-size: 24px;
+    font-size: 20px; /* 从24px改为20px */
     font-weight: 700;
     color: #2c3e50;
     font-family: 'Courier New', monospace;

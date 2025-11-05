@@ -6,7 +6,6 @@ import json
 
 from config import CONFIG
 from models import LoRaSendMessage
-from response_waiter import ResponseWaiter
 
 logger = logging.getLogger(__name__)
 

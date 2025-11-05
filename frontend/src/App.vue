@@ -1,18 +1,18 @@
 <template>
   <div id="app">
-    <!-- 简单的选择界面 -->
+    <!-- 选择界面 -->
     <div v-if="!selectedSystem" style="min-height: 100vh; background: linear-gradient(135deg, #667eea, #764ba2); display: flex; align-items: center; justify-content: center;">
       <div style="background: white; padding: 40px; border-radius: 20px; text-align: center;">
         <h1 style="color: #333; margin-bottom: 30px;">选择系统类型</h1>
 
         <div style="display: flex; gap: 20px;">
           <button style="background: #007bff; color: white; border: none; padding: 20px 40px; border-radius: 10px; cursor: pointer; font-size: 16px;"
-                  @click="selectedSystem = 'ground'">
+                  @click="selectSystem('ground')">
             🏗️ 地面检测系统
           </button>
 
           <button style="background: #6f42c1; color: white; border: none; padding: 20px 40px; border-radius: 10px; cursor: pointer; font-size: 16px;"
-                  @click="selectedSystem = 'mixed'">
+                  @click="selectSystem('mixed')">
             🔮 虚实融合系统
           </button>
         </div>
@@ -25,7 +25,6 @@
 
       <main class="main-content">
         <ParameterSettings @file-selected="handleFileSelected" />
-        <!-- 🔧 移除 SceneSettings -->
         <ResultDisplay :active-tab="activeResultTab"
                        :lora-file-name="sharedLoraFileName"
                        :lora-file-data="sharedLoraFileData"
@@ -33,7 +32,7 @@
       </main>
 
       <div class="system-switch">
-        <button class="switch-button" @click="selectedSystem = ''">
+        <button class="switch-button" @click="returnToSelection">
           🔄 返回选择
         </button>
       </div>
@@ -47,67 +46,19 @@
           <p>Virtual-Reality Integration System</p>
         </div>
 
-        <!-- 参数设置区域 -->
-        <div class="mixed-section">
-          <div class="section-header">
-            <i class="header-icon">⚙️</i>
-            <h2>参数设置</h2>
-            <div class="status-indicator" :class="udpStatus.connected ? 'connected' : 'disconnected'">
-              <span class="status-dot"></span>
-              <span>{{ udpStatus.connected ? 'UDP已连接' : 'UDP未连接' }}</span>
-            </div>
-          </div>
-          <div class="udp-settings">
-            <div class="setting-group">
-              <h4>🔗 UDP端口配置</h4>
-              <div class="udp-form">
-                <div class="form-row">
-                  <div class="form-group">
-                    <label>接收UDP端口</label>
-                    <input type="number"
-                           v-model.number="udpSettings.receivePort"
-                           placeholder="8002"
-                           class="udp-input"
-                           :disabled="updating" />
-                  </div>
-                </div>
-
-                <div class="button-row">
-                  <button class="update-button"
-                          @click="updateUDPConfig"
-                          :disabled="updating">
-                    {{ updating ? '更新中...' : '🔄 更新' }}
-                  </button>
-                  <button class="test-button"
-                          @click="testUDPSend"
-                          :disabled="!udpStatus.connected">
-                    📤 测试发送
-                  </button>
-                </div>
-
-                <!-- 状态显示 -->
-                <div class="status-info" v-if="udpStatus.message">
-                  <div class="status-message" :class="udpStatus.type">
-                    <i>{{ udpStatus.type === 'success' ? '✅' : udpStatus.type === 'error' ? '❌' : 'ℹ️' }}</i>
-                    {{ udpStatus.message }}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <!-- 事件列表区域 -->
         <div class="mixed-section">
           <div class="section-header">
             <i class="header-icon">📋</i>
-            <h2>事件列表</h2>
+            <h2>通信事件</h2>
             <div class="event-controls">
+              <!-- 🔧 删除UDP连接状态，添加SSE连接状态 -->
+              <div class="status-indicator" :class="{ connected: virtualSseConnected }">
+                <span class="status-dot"></span>
+                <span>{{ virtualSseConnected ? 'SSE已连接' : 'SSE未连接' }}</span>
+              </div>
               <button class="clear-button" @click="clearEvents">
                 🗑️ 清空列表
-              </button>
-              <button class="refresh-button" @click="refreshStatus">
-                🔄 刷新状态
               </button>
               <label class="auto-scroll">
                 <input type="checkbox" v-model="autoScroll">
@@ -117,44 +68,43 @@
           </div>
 
           <div class="event-list-container">
+            <!-- 简化表头：只保留时间和数据 -->
             <div class="event-header">
-              <div class="col-direction">方向</div>
-              <div class="col-source">源地址</div>
-              <div class="col-destination">目的地址</div>
               <div class="col-time">时间</div>
-              <div class="col-data">数据</div>
+              <div class="col-data">数据内容</div>
             </div>
 
             <div class="event-list" ref="eventListRef">
-              <div v-for="event in eventList"
+              <div v-for="event in virtualEvents"
                    :key="event.id"
                    class="event-item"
-                   :class="{ 'send': event.direction === '发', 'receive': event.direction === '收' }">
-                <div class="col-direction">
-                  <span class="direction-badge" :class="event.direction === '发' ? 'send' : 'receive'">
-                    {{ event.direction === '发' ? '📤' : '📥' }} {{ event.direction }}
+                   :class="{
+                     'send-frame': event.type === 'send',
+                     'receive-frame': event.type === 'receive'
+                   }">
+                <div class="col-time">
+                  <span class="frame-type-badge" :class="event.type">
+                    {{ event.type === 'send' ? '📤 发送' : '📥 接收' }}
                   </span>
+                  <span class="time-text">{{ event.time }}</span>
                 </div>
-                <div class="col-source">{{ event.sourceAddress }}</div>
-                <div class="col-destination">{{ event.destinationAddress }}</div>
-                <div class="col-time">{{ event.time }}</div>
                 <div class="col-data">
                   <div class="data-preview">{{ event.data }}</div>
                 </div>
               </div>
 
               <!-- 空状态 -->
-              <div v-if="eventList.length === 0" class="empty-state">
+              <div v-if="virtualEvents.length === 0" class="empty-state">
                 <i>📡</i>
-                <p>暂无UDP通信事件</p>
-                <small>启动UDP通信后，事件将在此显示</small>
+                <p>暂无通信事件</p>
+                <small>虚实融合节点通信事件将在此显示</small>
               </div>
             </div>
           </div>
         </div>
 
         <div class="system-switch">
-          <button class="switch-button" @click="selectedSystem = ''">
+          <button class="switch-button" @click="returnToSelection">
             🔄 返回选择
           </button>
         </div>
@@ -170,13 +120,31 @@
   import ParameterSettings from './components/ParameterSettings.vue'
   import ResultDisplay from './components/ResultDisplay.vue'
 
-  // 初始状态：空字符串表示显示选择界面
+  // API基础URL
+  const API_BASE = '/api'
+
+  // 初始状态
   const selectedSystem = ref<string>('')
   const activeResultTab = ref('ber')
 
   // 共享的LoRa文件数据
   const sharedLoraFileName = ref('')
   const sharedLoraFileData = ref('')
+
+  // 🔧 虚实融合事件列表
+  const virtualEvents = ref<Array<{
+    id: number
+    type: string
+    time: string
+    data: string
+  }>>([])
+
+  const autoScroll = ref(true)
+  const eventListRef = ref<HTMLElement>()
+
+  // 🔧 虚实融合SSE连接状态
+  const virtualSseConnected = ref(false)
+  let virtualEventSource: EventSource | null = null
 
   // 处理参数设置页面的文件选择
   const handleFileSelected = (fileName: string, fileData: string) => {
@@ -185,139 +153,96 @@
     console.log(`✅ App接收到文件: ${fileName}, ${fileData.length / 2} 字节`)
   }
 
-  // 清空文件数据的函数
+  // 清空文件数据
   const clearFileData = () => {
     sharedLoraFileName.value = ''
     sharedLoraFileData.value = ''
     console.log('🧹 文件数据已清空')
   }
 
-  // 在虚实融合系统的数据中添加
-  const messages = ref([])
-  const messagePolling = ref(null)
-
-  // UDP设置
-  const udpSettings = reactive({
-    receivePort: 8002  // 删除了 sendPort
-  })
-
-  // UDP状态
-  const udpStatus = reactive({
-    connected: false,
-    message: '',
-    type: 'info' // success, error, info
-  })
-
-  // 更新状态
-  const updating = ref(false)
-
-  // 事件列表
-  const eventList = ref<Array<{
-    id: number
-    direction: string
-    sourceAddress: string
-    destinationAddress: string
-    time: string
-    data: string
-  }>>([])
-
-  const autoScroll = ref(true)
-  const eventListRef = ref<HTMLElement>()
-
-  // API基础URL
-  const API_BASE = '/api'
-
-  // 显示状态消息
-  const showStatus = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
-    udpStatus.message = message
-    udpStatus.type = type
-
-    // 3秒后自动清除消息
-    setTimeout(() => {
-      if (udpStatus.message === message) {
-        udpStatus.message = ''
-      }
-    }, 3000)
-  }
-
-  // 更新UDP配置
-  const updateUDPConfig = async () => {
-    if (updating.value) return
-
-    updating.value = true
-
+  // 模式切换API调用
+  const switchMode = async (mode: string) => {
     try {
-      const response = await axios.post(`${API_BASE}/udp/config`, {
-        receivePort: udpSettings.receivePort
-      })
+      console.log(`🔄 准备切换到 ${mode} 模式`)
+      const response = await axios.post(`${API_BASE}/mode/switch/${mode}`)
 
       if (response.data.success) {
-        // 直接从POST响应中获取状态，不依赖GET请求
-        udpStatus.connected = true
-        showStatus(`UDP配置更新成功 - 接收端口: ${udpSettings.receivePort}`, 'success')
-        console.log('UDP配置更新成功:', response.data)
-      } else {
-        throw new Error(response.data.message || '配置更新失败')
+        console.log(`✅ 切换到 ${mode} 模式成功`)
       }
     } catch (error) {
-      console.error('UDP配置更新失败:', error)
-      udpStatus.connected = false
-      showStatus(`配置更新失败: ${error.response?.data?.detail || error.message}`, 'error')
-    } finally {
-      updating.value = false
+      console.error('❌ 模式切换失败:', error)
     }
   }
 
-  // 测试UDP发送
-  const testUDPSend = async () => {
-    try {
-      const testMessage = `测试消息 - ${new Date().toLocaleTimeString()}`
+  // 选择系统
+  const selectSystem = async (system: string) => {
+    console.log(`📍 选择系统: ${system}`)
+    selectedSystem.value = system
 
-      const response = await axios.post(`${API_BASE}/udp/send`, {
-        message: testMessage,
-        target_ip: "127.0.0.1"
-      })
+    const mode = system === 'ground' ? 'ground' : 'virtual'
+    await switchMode(mode)
+  }
 
-      if (response.data.success) {
-        showStatus('UDP测试消息发送成功', 'success')
+  // 返回选择界面
+  const returnToSelection = () => {
+    console.log('🔙 返回系统选择')
+    selectedSystem.value = ''
 
-        // 使用后端返回的详细信息
-        const details = response.data.details
-        if (details) {
-          addEvent('发', details.from, details.to, details.data)
-        } else {
-          // 兜底方案，不显示随机端口
-          addEvent('发', `127.0.0.1`, `127.0.0.1:${udpSettings.receivePort}`, testMessage)
+    if (sharedLoraFileData.value) {
+      clearFileData()
+    }
+  }
+
+  // 🔧 连接虚实融合SSE
+  const connectVirtualSSE = () => {
+    if (virtualEventSource) {
+      virtualEventSource.close()
+    }
+
+    console.log('🔗 正在连接虚实融合SSE...')
+    virtualEventSource = new EventSource(`${API_BASE}/virtual/stream`)  // 🔧 使用新端点
+
+    virtualEventSource.onopen = () => {
+      virtualSseConnected.value = true
+      console.log('✅ 虚实融合SSE 连接成功')
+    }
+
+    virtualEventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+
+        if (data.type === 'connected') {
+          console.log('📡 SSE 初始连接:', data.message)
+        } else if (data.type === 'virtual_event') {
+          handleVirtualEvent(data.data)
         }
-      } else {
-        throw new Error(response.data.message || '发送失败')
+      } catch (error) {
+        console.error('❌ SSE 消息解析错误:', error)
       }
-    } catch (error) {
-      console.error('UDP发送测试失败:', error)
-      showStatus(`测试发送失败: ${error.response?.data?.detail || error.message}`, 'error')
+    }
+
+    virtualEventSource.onerror = (error) => {
+      virtualSseConnected.value = false
+      console.error('❌ 虚实融合SSE 连接错误')
+
+      setTimeout(() => {
+        if (selectedSystem.value === 'mixed') {
+          console.log('🔄 尝试重新连接虚实融合SSE...')
+          connectVirtualSSE()
+        }
+      }, 5000)
     }
   }
 
-  // 刷新UDP状态
-  const loadInitialConfig = async () => {
-    try {
-      const response = await axios.get(`${API_BASE}/udp/config`)
+  // 🔧 处理虚实融合事件
+  const handleVirtualEvent = (msg: any) => {
+    const msgType = msg.message_type
 
-      if (response.data.success) {
-        const config = response.data.data
-        udpSettings.receivePort = config.receivePort  
-        udpStatus.connected = response.data.receiver_status.running
-
-        console.log('初始UDP配置加载:', config)
-      }
-    } catch (error) {
-      console.error('加载初始配置失败:', error)
-      showStatus('无法连接到后端服务', 'error')
+    // 只处理 0x00 (发送) 和 0x01 (接收)
+    if (msgType !== 0x00 && msgType !== 0x01) {
+      return
     }
-  }
 
-  // 添加事件到列表
-  const addEvent = (direction: string, source: string, destination: string, data: string) => {
     const now = new Date()
     const time = now.toLocaleTimeString('zh-CN', {
       hour12: false,
@@ -327,21 +252,34 @@
       fractionalSecondDigits: 3
     })
 
-    eventList.value.push({
-      id: Date.now() + Math.random(),
-      direction,
-      sourceAddress: source,
-      destinationAddress: destination,
-      time,
-      data
-    })
+    let eventType = ''
+    let eventData = ''
 
-    // 限制事件列表长度
-    if (eventList.value.length > 100) {
-      eventList.value.shift()
+    if (msgType === 0x00) {
+      // 🔧 信号发送帧 - 使用 virtual_send_info
+      eventType = 'send'
+      const info = msg.virtual_send_info || {}
+      eventData = `发送时间: ${info.send_time || '无'}, 传播参数: ${info.propagation_param || '无'}, 数据: ${info.data_hex || '无'}`
+    } else if (msgType === 0x01) {
+      // 🔧 信号接收帧 - 使用 virtual_receive_info
+      eventType = 'receive'
+      const info = msg.virtual_receive_info || {}
+      eventData = `接收时间: ${info.receive_time || '无'}, 时间戳: ${info.receive_timestamp || '无'}, 数据: ${info.data_hex || '无'}`
     }
 
-    // 自动滚动到底部
+    virtualEvents.value.push({
+      id: Date.now() + Math.random(),
+      type: eventType,
+      time,
+      data: eventData
+    })
+
+    // 限制列表长度
+    if (virtualEvents.value.length > 100) {
+      virtualEvents.value.shift()
+    }
+
+    // 自动滚动
     if (autoScroll.value) {
       nextTick(() => {
         if (eventListRef.value) {
@@ -351,147 +289,51 @@
     }
   }
 
-  // 清空事件列表
+  // 清空虚实事件
   const clearEvents = () => {
-    eventList.value = []
-    showStatus('事件列表已清空', 'info')
+    virtualEvents.value = []
+    console.log('🗑️ 事件列表已清空')
   }
 
-  // 组件挂载时加载初始配置
-  onMounted(() => {
-    console.log('App.vue 已加载，selectedSystem 初始值:', selectedSystem.value)
-    loadInitialConfig()
-  })
+  // 处理系统切换
+  const handleSystemChange = (system: string) => {
+    console.log(`🔄 handleSystemChange: ${system}`)
 
-  // 定时刷新状态（可选）
-  let statusInterval: number | null = null
-
-  // 监听系统选择变化
-  const startStatusPolling = () => {
-    if (statusInterval) clearInterval(statusInterval)
-    // 每30秒刷新一次状态
-    statusInterval = setInterval(refreshStatus, 30000)
-  }
-
-  const stopStatusPolling = () => {
-    if (statusInterval) {
-      clearInterval(statusInterval)
-      statusInterval = null
+    if (system === 'mixed') {
+      connectVirtualSSE()
+    } else {
+      if (virtualEventSource) {
+        virtualEventSource.close()
+        virtualEventSource = null
+        virtualSseConnected.value = false
+      }
     }
   }
 
   // 监听系统切换
-  const handleSystemChange = (system) => {
-    if (system === 'mixed') {
-      startStatusPolling()
-      startMessagePolling() // 添加这行
-    } else {
-      stopStatusPolling()
-      stopMessagePolling() // 添加这行
-    }
-  }
-
-  // 在 onUnmounted 中添加清理
-  onUnmounted(() => {
-    stopStatusPolling()
-    stopMessagePolling() // 添加这行
-  })
-
-  // 监听选择的系统变化
-  import { watch } from 'vue'
-  //watch(selectedSystem, (newValue) => {
-  //  handleSystemChange(newValue)
-  //})
-
   watch(selectedSystem, (newValue, oldValue) => {
-  console.log(`🔄 系统切换: ${oldValue} -> ${newValue}`)
-  
-  // 当从地面检测系统切换到其他系统时，清空文件数据
-  if (oldValue === 'ground' && newValue !== 'ground') {
-    clearFileData()
-  }
-  
-  handleSystemChange(newValue)
-})
+    console.log(`🔄 系统切换: ${oldValue} -> ${newValue}`)
 
-  // 组件卸载时清理
-  onUnmounted(() => {
-    stopStatusPolling()
+    if (oldValue === 'ground' && newValue !== 'ground') {
+      clearFileData()
+    }
+
+    handleSystemChange(newValue)
   })
 
-  // 获取消息
-  //const fetchMessages = async () => {
-  //  try {
-  //    const response = await axios.get(`${API_BASE}/udp/messages?limit=100`)
-  //    if (response.data.success) {
-  //      messages.value = response.data.data.messages
-  //    }
-  //  } catch (error) {
-  //    console.error('获取消息失败:', error)
-  //  }
-  //}
+  // 组件挂载
+  onMounted(() => {
+    console.log('🎬 App.vue 已加载')
+  })
 
-  //// 开始消息轮询
-  //const startMessagePolling = () => {
-  //  if (messagePolling.value) return
+  // 组件卸载
+  onUnmounted(() => {
+    console.log('🛑 App.vue 卸载')
 
-  //  messagePolling.value = setInterval(fetchMessages, 1000) // 每秒获取一次
-  //}
-
-  //// 停止消息轮询
-  //const stopMessagePolling = () => {
-  //  if (messagePolling.value) {
-  //    clearInterval(messagePolling.value)
-  //    messagePolling.value = null
-  //  }
-  //}
-
-  // 清空消息
-  const clearMessages = async () => {
-    try {
-      await axios.delete(`${API_BASE}/udp/messages`)
-      messages.value = []
-      showStatus('消息队列已清空', 'info')
-    } catch (error) {
-      console.error('清空消息失败:', error)
-      showStatus('清空消息失败', 'error')
+    if (virtualEventSource) {
+      virtualEventSource.close()
     }
-  }
-
-  console.log('App.vue 已加载，selectedSystem 初始值:', selectedSystem.value)
-
-  // 刷新UDP状态
-  const refreshStatus = async () => {
-    try {
-      const response = await axios.get(`${API_BASE}/udp/config`)
-
-      if (response.data.success) {
-        udpStatus.connected = response.data.receiver_status.running
-        console.log('✅ UDP状态刷新成功')
-      }
-    } catch (error) {
-      console.error('❌ 刷新UDP状态失败:', error)
-      udpStatus.connected = false
-    }
-  }
-
-  const switchMode = async (mode) => {
-    try {
-      const response = await axios.post(`/api/mode/switch/${mode}`)
-      if (response.data.success) {
-        console.log(`✅ 切换到${mode}模式成功`)
-      }
-    } catch (error) {
-      console.error('模式切换失败:', error)
-    }
-  }
-
-  // 在选择系统时调用
-  const selectSystem = (system) => {
-    selectedSystem.value = system
-    const mode = system === 'ground' ? 'ground' : 'virtual'
-    switchMode(mode)
-  }
+  })
 </script>
 
 <style scoped>
@@ -1141,5 +983,80 @@
     .data-preview {
       max-width: none;
     }
+  }
+
+  .event-header {
+    display: grid;
+    grid-template-columns: 200px 1fr; /* 时间 + 数据 */
+    gap: 1rem;
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.1);
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #e0c3fc;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .event-item {
+    display: grid;
+    grid-template-columns: 200px 1fr; /* 时间 + 数据 */
+    gap: 1rem;
+    padding: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    transition: background 0.2s ease;
+    align-items: center;
+  }
+
+    .event-item.send-frame {
+      border-left: 3px solid #28a745;
+      background: rgba(40, 167, 69, 0.05);
+    }
+
+    .event-item.receive-frame {
+      border-left: 3px solid #007bff;
+      background: rgba(0, 123, 255, 0.05);
+    }
+
+  .col-time {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .frame-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+    .frame-type-badge.send {
+      background: rgba(40, 167, 69, 0.2);
+      color: #28a745;
+    }
+
+    .frame-type-badge.receive {
+      background: rgba(0, 123, 255, 0.2);
+      color: #007bff;
+    }
+
+  .time-text {
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+    color: #9bb5ff;
+  }
+
+  .data-preview {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+    color: #e0c3fc;
+    word-break: break-all;
+    line-height: 1.4;
   }
 </style>

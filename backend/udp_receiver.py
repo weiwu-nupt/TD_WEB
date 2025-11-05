@@ -8,7 +8,6 @@ from collections import deque
 
 from frame_parser import parse_message
 from frame_processor import process_frame_by_type
-from frame_processor_virtual import process_virtual_frame_by_type
 from config import SystemMode, current_mode
 
 logger = logging.getLogger(__name__)
@@ -90,11 +89,7 @@ class UDPReceiver:
                 # 处理消息
                 msg_type = parsed_msg.get("message_type", 0)
                 
-                # 🔧 根据当前模式选择处理器
-                if current_mode["mode"] == SystemMode.GROUND:
-                    result = process_frame_by_type(parsed_msg, addr)
-                else:  # SystemMode.VIRTUAL
-                    result = process_virtual_frame_by_type(parsed_msg, addr)
+                result = process_frame_by_type(parsed_msg, addr)
 
                 # 🔧 根据模式决定是否加入队列
                 if current_mode["mode"] == SystemMode.GROUND:
@@ -103,9 +98,9 @@ class UDPReceiver:
                         message_queue.append(result)
                 else:
                     # 虚实融合模式：添加广播消息
-                    message_queue.append(result)
-                
-                
+                    if msg_type in  [0x00, 0x01, 0x05]:
+                        message_queue.append(result)
+ 
             except socket.timeout:
                 continue
             except Exception as e:

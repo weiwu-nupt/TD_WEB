@@ -3,135 +3,172 @@
 import struct
 import logging
 from config import (
-    FRAME_TYPE_BROADCAST, FRAME_TYPE_TIMESTAMP, FRAME_TYPE_LINK_STATUS,
-    FRAME_TYPE_FPGA, FRAME_TYPE_LORA, get_frame_type_name
+    FRAME_TYPE_VIRTUAL_SEND, FRAME_TYPE_VIRTUAL_RECEIVE, 
+    FRAME_TYPE_FPGA, FRAME_TYPE_LORA, get_frame_type_name, CONFIG
 )
 
 logger = logging.getLogger(__name__)
 
-def process_broadcast_frame(parsed_msg: dict, addr: tuple) -> dict:
-    """处理广播帧 0x01"""
-    try:
-        message_content = parsed_msg.get("message_content", b"")
-        
-        processed_data = {
-            "frame_name": "广播帧",
-            "processing_result": "广播帧处理完成",
-            "source_ip": addr[0],
-            "source_port": addr[1],
-            "broadcast_info": {
-                "broadcast_id": 1,
-                "target_range": "全网",
-                "priority": "normal",
-                "content_hex": message_content.hex(),
-                "content_length": len(message_content)
-            }
-        }
-        return processed_data
-    except Exception as e:
-        logger.error(f"处理广播帧时发生错误: {e}")
-        return {
-            "frame_name": "广播帧",
-            "processing_result": f"处理失败: {str(e)}",
-            "error": "processing_error"
-        }
+udp_sender = None
 
-def process_timestamp_frame(parsed_msg: dict, addr: tuple) -> dict:
-    """处理发送时间戳回传帧 0x02"""
+def init_sender(sender):
+    """初始化发送器引用"""
+    global udp_sender
+    udp_sender = sender
+
+def process_virtual_send_frame(parsed_msg: dict, addr: tuple) -> dict:
+    """
+    信号发送帧 0x00
+    直接透传到ARM
+    """
     try:
         message_content = parsed_msg.get("message_content", b"")
         
         if len(message_content) < 8:
-            raise ValueError("时间戳数据长度不足")
+            raise ValueError("信号发送帧数据长度不足")
         
-        # 解析两个时间戳(各4字节,大端序)
-        timestamp1 = struct.unpack('>I', message_content[0:4])[0]
-        timestamp2 = struct.unpack('>I', message_content[4:8])[0]
+        # 解析: 发送时间(4) + 信号传播参数(4) + 数据包(N)
+        send_time = struct.unpack('>I', message_content[0:4])[0]
+        propagation_param = struct.unpack('>I', message_content[4:8])[0]
+        data_packet = message_content[8:]
         
-        processed_data = {
-            "frame_name": "发送时间戳回传帧",
-            "processing_result": "时间戳回传帧处理完成",
-            "source_ip": addr[0],
-            "source_port": addr[1],
-            "timestamp_info": {
-                "timestamp1": timestamp1,
-                "timestamp2": timestamp2,
-                "delay_ms": abs(timestamp2 - timestamp1)
+        # 🔧 透传到ARM
+        if udp_sender:
+            # 重新构建完整消息并发送
+            from frame_parser import build_message
+            full_message = build_message(FRAME_TYPE_VIRTUAL_SEND, message_content)
+            
+            success = udp_sender.send_raw_data(
+                full_message,
+                target_ip=CONFIG["arm_ip"],
+                target_port=CONFIG["arm_port"]
+            )
+        
+        return {
+            "message_type": FRAME_TYPE_VIRTUAL_SEND,
+            "virtual_send_info": {
+                "send_time": send_time,
+                "propagation_param": propagation_param,
+                "data_hex": data_packet.hex().upper()
             }
         }
-        return processed_data
+        
     except Exception as e:
-        logger.error(f"处理时间戳帧时发生错误: {e}")
+        logger.error(f"处理信号发送帧时发生错误: {e}")
         return {
-            "frame_name": "发送时间戳回传帧",
+            "message_type": FRAME_TYPE_VIRTUAL_SEND,
+            "frame_name": "信号发送帧",
             "processing_result": f"处理失败: {str(e)}",
             "error": "processing_error"
         }
 
-def process_link_status_frame(parsed_msg: dict, addr: tuple) -> dict:
-    """处理链路状态帧 0x03"""
+def process_virtual_receive_frame(parsed_msg: dict, addr: tuple) -> dict:
+    """
+    处理虚实节点信号接收帧 0x01
+    直接透传到ARM
+    """
     try:
-        processed_data = {
-            "frame_name": "链路状态帧",
-            "processing_result": "链路状态帧处理完成",
-            "source_ip": addr[0],
-            "source_port": addr[1],
-            "link_info": {
-                "link_quality": "良好",
-                "signal_strength": -60,
-                "connection_status": "connected"
+        message_content = parsed_msg.get("message_content", b"")
+        
+        if len(message_content) < 8:
+            raise ValueError("信号接收帧数据长度不足")
+        
+        # 解析: 接收时间(4) + 接收时间戳(4) + 数据包(N)
+        receive_time = struct.unpack('>I', message_content[0:4])[0]
+        receive_timestamp = struct.unpack('>I', message_content[4:8])[0]
+        data_packet = message_content[8:]
+        
+        if udp_sender:
+            from frame_parser import build_message
+            full_message = build_message(FRAME_TYPE_VIRTUAL_RECEIVE, message_content)
+            
+            success = udp_sender.send_raw_data(
+                full_message,
+                target_ip=CONFIG["arm_ip"],
+                target_port=CONFIG["arm_port"]
+            )
+        
+        return {
+            "message_type": FRAME_TYPE_VIRTUAL_RECEIVE,
+            "virtual_receive_info": {
+                "receive_time": receive_time,
+                "receive_timestamp": receive_timestamp,
+                "data_hex": data_packet.hex().upper()
             }
         }
-        return processed_data
+        
     except Exception as e:
-        logger.error(f"处理链路状态帧时发生错误: {e}")
+        logger.error(f"处理虚实节点信号接收帧时发生错误: {e}")
         return {
-            "frame_name": "链路状态帧",
+            "message_type": FRAME_TYPE_VIRTUAL_RECEIVE,
+            "frame_name": "虚实节点信号接收帧",
             "processing_result": f"处理失败: {str(e)}",
             "error": "processing_error"
         }
 
 def process_fpga_frame(parsed_msg: dict, addr: tuple) -> dict:
-    """处理FPGA读写帧 0x05"""
+    """
+    处理FPGA读写帧 0x05
+    
+    帧格式：
+    - operation_type (1字节): 0=读, 1=写
+    - operation_count (1字节): 操作次数
+    - 操作数据: [address(4字节) + data(4字节)] * N
+    """
     try:
         message_content = parsed_msg.get("message_content", b"")
         
-        if len(message_content) < 6:
-            raise ValueError("FPGA数据长度不足")
+        if len(message_content) < 2:
+            raise ValueError("FPGA数据长度不足（至少需要2字节）")
         
-        # 解析: operation_type(1) + operation_count(1) + address(4) + [data(4)]
+        # 🔧 解析操作类型和操作次数
         operation_type = message_content[0]
         operation_count = message_content[1]
-        address = struct.unpack('>I', message_content[2:6])[0]
-
-        # if address == 0x123:
-
         
-        # operation_info = {
-        #     "operation_type": operation_type,
-        #     "operation_name": "读操作" if operation_type == 0 else "写操作",
-        #     "operation_count": operation_count,
-        #     "address": f"0x{address:08X}",
-        #     "address_decimal": address
-        # }
+        # 🔧 解析每个操作
+        operations = []
+        offset = 2  # 跳过前2个字节
         
-        # # 如果是写操作或读操作响应,解析数据
-        # if len(message_content) >= 10:
-        #     data_value = struct.unpack('>I', message_content[6:10])[0]
-        #     operation_info["data"] = f"0x{data_value:08X}"
-        #     operation_info["data_decimal"] = data_value
+        for i in range(operation_count):
+            # 检查剩余数据是否足够
+            if offset + 8 > len(message_content):
+                logger.warning(f"⚠️ FPGA操作#{i+1} 数据不足，跳过")
+                break
+            
+            # 解析地址（4字节大端序）
+            address = struct.unpack('>I', message_content[offset:offset+4])[0]
+            
+            # 解析数据（4字节大端序）
+            data = struct.unpack('>I', message_content[offset+4:offset+8])[0]
+            
+            operations.append({
+                "index": i + 1,
+                "address": address,
+                "value": data
+            })
+            
+            offset += 8  # 下一个操作
         
-        # processed_data = {
-        #     "frame_name": "FPGA操作帧",
-        #     "processing_result": f"FPGA{operation_info['operation_name']}处理完成",
-        #     "source_ip": addr[0],
-        #     "source_port": addr[1],
-        #     "fpga_info": operation_info
-        # }
-        return True
+        # 🔧 构建返回结果（会被加入到消息队列）
+        result = {
+            "message_type": 0x05,
+            "fpga_operation_info": {
+                "operation_type_code": operation_type,
+                "operation_count": operation_count,
+                "operations": operations,
+                "total_operations_parsed": len(operations)
+            }
+        }
+        
+        return result
         
     except Exception as e:
-        logger.error(f"处理FPGA帧时发生错误: {e}")
+        logger.error(f"❌ 处理FPGA帧时发生错误: {e}", exc_info=True)
+        return {
+            "message_type": 0x05,
+            "processing_result": f"处理失败: {str(e)}",
+            "error": "processing_error"
+        }
 
 def process_lora_frame(parsed_msg: dict, addr: tuple) -> dict:
     """处理LoRa收发帧 0x07"""
@@ -176,12 +213,10 @@ def process_frame_by_type(parsed_msg: dict, addr: tuple) -> dict:
     message_type = parsed_msg.get("message_type", 0)
     
     try:
-        if message_type == FRAME_TYPE_BROADCAST:
-            return process_broadcast_frame(parsed_msg, addr)
-        elif message_type == FRAME_TYPE_TIMESTAMP:
-            return process_timestamp_frame(parsed_msg, addr)
-        elif message_type == FRAME_TYPE_LINK_STATUS:
-            return process_link_status_frame(parsed_msg, addr)
+        if message_type == FRAME_TYPE_VIRTUAL_SEND:
+            return process_virtual_send_frame(parsed_msg, addr)
+        elif message_type == FRAME_TYPE_VIRTUAL_RECEIVE:
+            return process_virtual_receive_frame(parsed_msg, addr)
         elif message_type == FRAME_TYPE_FPGA:
             return process_fpga_frame(parsed_msg, addr)
         elif message_type == FRAME_TYPE_LORA:

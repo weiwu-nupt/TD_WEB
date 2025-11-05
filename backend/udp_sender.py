@@ -118,13 +118,12 @@ class UDPSender:
             return False
 
     @staticmethod
-    def send_raw_data(self, data: bytes, target_ip: str, target_port: int) -> bool:
+    def send_raw_data(data: bytes, target_ip: str, target_port: int) -> bool:
         """
         🔧 新增：发送原始字节数据（用于透传）
         """
         try:
             self.socket.sendto(data, (target_ip, target_port))
-            logger.info(f"✅ 原始数据已发送到 {target_ip}:{target_port}, 长度: {len(data)}字节")
             return True
         except Exception as e:
             logger.error(f"❌ 发送原始数据失败: {e}")

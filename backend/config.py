@@ -44,18 +44,14 @@ current_config = {
 }
 
 # 帧类型常量
-FRAME_TYPE_BROADCAST = 0x01      # 广播帧
-FRAME_TYPE_TIMESTAMP = 0x02      # 发送时间戳回传帧  
-FRAME_TYPE_LINK_STATUS = 0x03    # 链路状态帧
-FRAME_TYPE_FPGA = 0x05           # FPGA读写帧
-FRAME_TYPE_LORA = 0x07           # LoRa收发帧
-
-
-# 🔧 新增：帧类型常量 - 虚实融合模式
 FRAME_TYPE_VIRTUAL_SEND = 0x00       # 虚实节点信号发送帧
 FRAME_TYPE_VIRTUAL_RECEIVE = 0x01    # 虚实节点信号接收帧
 FRAME_TYPE_VIRTUAL_TIMESTAMP = 0x02  # 虚实节点发送时间戳回传帧
 FRAME_TYPE_VIRTUAL_LINK = 0x03       # 虚实节点链路状态帧
+FRAME_TYPE_FPGA = 0x05           # FPGA读写帧
+FRAME_TYPE_LORA = 0x07           # LoRa收发帧
+
+
 
 # 帧同步头常量
 FRAME_SYNC_HEADER = 0x1ACFFC1D
@@ -69,7 +65,8 @@ current_parameters = {
         "bandwidth": 125,
         "coding": "4/5",
         "spreading_factor": 10,
-        "rf_frequency": 470000  # 🔧 新增：默认470MHz = 470000kHz
+        "rf_frequency": 470000,  # 🔧 新增：默认470MHz = 470000kHz
+        "attenuation": 10
     },
     "downlink": {
         "bandwidth": 125,

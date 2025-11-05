@@ -5,7 +5,6 @@ import logging
 
 from models import AllChannelParameters
 from config import CONFIG, current_parameters
-from response_waiter import ResponseWaiter
 
 logger = logging.getLogger(__name__)
 
@@ -120,9 +119,9 @@ def build_doppler_registers(doppler, bandwidth: int):
         rate_reg = 0
     
     return [
-        (0x25, freq_max_reg & 0xFFFFFFFF),  # 频移上限
-        (0x26, freq_min_reg & 0xFFFFFFFF),  # 频移下限
-        (0x27, rate_reg & 0xFFFFFFFF)       # 频移变化率
+        (0x30, freq_max_reg & 0xFFFFFFFF),  # 频移上限
+        (0x31, freq_min_reg & 0xFFFFFFFF),  # 频移下限
+        (0x32, rate_reg & 0xFFFFFFFF)       # 频移变化率
     ]
 
 @router.get("/parameters")
@@ -157,15 +156,21 @@ async def write_parameters(params: AllChannelParameters):
             params.uplink.coding,
             params.lora_data_length
         )
+        batch_operations.append((0x0, 0))
         batch_operations.append((0x20, reg1))
         batch_operations.append((0x28, reg2))
         batch_operations.append((0x60, reg1))
         batch_operations.append((0x68, reg2))
+        batch_operations.append((0x0, 3))
         
         # 射频频率 (地址: 0xFF)
         if params.uplink.rf_frequency is not None:
             rf_freq = int(params.uplink.rf_frequency)  # kHz
             batch_operations.append((0xFF, rf_freq))
+
+        if params.uplink.attenuation is not None:
+            attenuation = int(params.uplink.attenuation) # dB
+            batch_operations.append((0xFE, attenuation)) 
         
         # 2. 下行通道 (地址: 0x40)
         reg = build_downlink_register(
