@@ -8,7 +8,8 @@ from collections import deque
 
 from frame_parser import parse_message
 from frame_processor import process_frame_by_type
-from response_waiter import ResponseWaiter
+from frame_processor_virtual import process_virtual_frame_by_type
+from config import SystemMode, current_mode
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,8 @@ class UDPReceiver:
         # 如果已经在运行，先停止
         if self.running:
             self.stop()
+
+        message_queue.clear()
             
         try:
             # 创建UDP socket
@@ -67,6 +70,7 @@ class UDPReceiver:
             if self.thread and self.thread.is_alive():
                 self.thread.join(timeout=2)
             
+            message_queue.clear()
             logger.info(f"UDP接收器已停止 (端口: {self.current_port})")
             self.current_port = None
     
@@ -84,23 +88,23 @@ class UDPReceiver:
                     continue
                 
                 # 处理消息
-                result = process_frame_by_type(parsed_msg, addr)
+                msg_type = parsed_msg.get("message_type", 0)
                 
-                # # 合并解析信息和处理结果
-                # result["message_type"] = parsed_msg["message_type"]
-                # result["message_length"] = parsed_msg["message_length"]
-                
-                # # 添加接收信息
-                # result["dest_port"] = self.current_port
-                # result["receive_time"] = datetime.now().isoformat()
-                # result["direction"] = "receive"
-                
-                # 添加到消息队列
-                if result["message_type"] == 0x07:
+                # 🔧 根据当前模式选择处理器
+                if current_mode["mode"] == SystemMode.GROUND:
+                    result = process_frame_by_type(parsed_msg, addr)
+                else:  # SystemMode.VIRTUAL
+                    result = process_virtual_frame_by_type(parsed_msg, addr)
+
+                # 🔧 根据模式决定是否加入队列
+                if current_mode["mode"] == SystemMode.GROUND:
+                    # 地面检测模式：只添加LoRa接收消息
+                    if msg_type == 0x07:
+                        message_queue.append(result)
+                else:
+                    # 虚实融合模式：添加广播消息
                     message_queue.append(result)
                 
-                # 通知等待的请求
-                # ResponseWaiter.notify_response(result["message_type"], result)
                 
             except socket.timeout:
                 continue

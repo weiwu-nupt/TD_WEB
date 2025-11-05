@@ -58,6 +58,7 @@ async def lora_receive_stream():
         from udp_receiver import get_message_queue
         
         message_queue = get_message_queue()
+        message_queue.clear()
         
         # 发送初始连接消息
         yield f"data: {json.dumps({'type': 'connected', 'message': 'SSE连接成功'})}\n\n"

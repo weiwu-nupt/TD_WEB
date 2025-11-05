@@ -152,8 +152,8 @@ def process_lora_frame(parsed_msg: dict, addr: tuple) -> dict:
         duration = complete_timestamp - receive_timestamp
             
         processed_data = {
+            "message_type": FRAME_TYPE_LORA,
             "frame_name": "LoRa接收帧",
-            "message_type": 0x07,
             "lora_receive_info": {
                 "frame_count": frame_count,
                 "duration_ms": duration,

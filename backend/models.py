@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# models.py - Pydantic数据模型
 from pydantic import BaseModel
 from typing import Optional
 
@@ -18,6 +16,7 @@ class ChannelParameters(BaseModel):
     bandwidth: int  # 125, 250, 500
     spreading_factor: int  # 6-12
     coding: str  # '4/5', '4/6', '4/7', '4/8'
+    rf_frequency: Optional[int] = None  # 🔧 新增：射频频率 (kHz)，仅上行通道需要
 
 class InterferenceSettings(BaseModel):
     """干扰设置"""

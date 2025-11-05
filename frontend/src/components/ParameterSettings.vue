@@ -73,6 +73,19 @@
                    max="12"
                    class="input-field" />
           </div>
+
+          <!-- 射频频率 -->
+          <div class="form-group">
+            <label>射频频率</label>
+            <div class="input-with-unit">
+              <input type="number"
+                     v-model.number="paramTabs.uplink.rf_frequency"
+                     placeholder="470000"
+                     step="1"
+                     class="input-field" />
+              <span class="unit-label">kHz</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -269,7 +282,7 @@
               <span class="input-prefix">下限</span>
               <input type="number"
                      v-model.number="dopplerSettings.frequencyMin"
-                     placeholder="-1000"
+                     placeholder="-10000"
                      class="range-input" />
               <span class="input-suffix">Hz</span>
             </div>
@@ -278,7 +291,7 @@
               <span class="input-prefix">上限</span>
               <input type="number"
                      v-model.number="dopplerSettings.frequencyMax"
-                     placeholder="1000"
+                     placeholder="10000"
                      class="range-input" />
               <span class="input-suffix">Hz</span>
             </div>
@@ -291,7 +304,7 @@
           <div class="input-with-unit">
             <input type="number"
                    v-model.number="dopplerSettings.rate"
-                   placeholder="10"
+                   placeholder="1000"
                    class="input-field" />
             <span class="unit-label">Hz/s</span>
           </div>
@@ -334,12 +347,13 @@
   // 通道参数
   const paramTabs = reactive({
     uplink: {
-      bandwidth: 125,
+      bandwidth: 500,
       coding: '4/5',
-      spreading_factor: 9
+      spreading_factor: 10,
+      rf_frequency: 470000  // 🔧 新增：默认470000 kHz
     },
     downlink: {
-      bandwidth: 125,
+      bandwidth: 500,
       coding: '4/5',
       spreading_factor: 10
     }
@@ -348,8 +362,8 @@
   // 干扰设置
   const interferenceSettings = reactive({
     enabled: false,
-    mode: 'shared',  // 'shared' 或 'independent'
-    type: 'single_tone',  // 'single_tone', 'low_noise', 'channel_noise'
+    mode: 'shared',
+    type: 'single_tone',
     center_frequency: 0,
     power: 0,
     spreading_factor: 7
@@ -357,10 +371,10 @@
 
   // 多普勒设置
   const dopplerSettings = reactive({
-    type: 'none',  // 'none', 'constant', 'linear'
-    frequencyMin: -1000,
-    frequencyMax: 1000,
-    rate: 10
+    type: 'none',
+    frequencyMin: -10000,
+    frequencyMax: 10000,
+    rate: 1000
   })
 
   // 计算f_b (基带频率)

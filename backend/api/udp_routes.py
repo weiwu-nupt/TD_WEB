@@ -105,6 +105,7 @@ async def get_messages(limit: int = 50):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/messages")
+
 async def clear_messages():
     """清空消息队列"""
     try:

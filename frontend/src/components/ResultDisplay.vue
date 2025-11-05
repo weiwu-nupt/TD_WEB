@@ -36,7 +36,7 @@
           <div class="result-sections">
             <div v-if="tab.id === 'ber'" class="result-section">
 
-              <!-- 文件发送区域 - 简化版 -->
+              <!-- 文件发送区域 -->
               <div class="file-sender-section">
                 <div class="file-sender-header">
                   <i>📡</i>
@@ -67,7 +67,7 @@
                     <span>请先在"参数设置"页面选择LoRa传输文件</span>
                   </div>
 
-                  <!-- 发送控制 - 只有选择文件后才显示 -->
+                  <!-- 发送控制 -->
                   <div v-if="props.loraFileData" class="send-controls">
                     <div class="control-group">
                       <label>发送间隔 (秒):</label>
@@ -119,13 +119,13 @@
 
                   <!-- 操作提示 -->
                   <div v-if="sendStatus" class="send-status" :class="sendStatus.type">
-                    <i>{{ sendStatus.type === 'success' ? '✅' : '❌' }}</i>
+                    <i>{{ sendStatus.type === 'success' ? '✅' : sendStatus.type === 'error' ? '❌' : 'ℹ️' }}</i>
                     {{ sendStatus.message }}
                   </div>
                 </div>
               </div>
 
-              <!-- 接收数据显示 - 优化样式 -->
+              <!-- 接收数据显示 -->
               <div class="receive-section">
                 <div class="receive-header">
                   <i>📥</i>
@@ -140,24 +140,23 @@
                        :key="msg.id"
                        class="receive-item"
                        :class="{
-                       'frame-lost': msg.isLost,
-                       'frame-error': msg.hasError,
-                       'frame-correct': !msg.isLost && !msg.hasError
-                     }">
+                         'frame-lost': msg.isLost,
+                         'frame-error': msg.hasError,
+                         'frame-correct': !msg.isLost && !msg.hasError
+                       }">
                     <div class="receive-time">{{ msg.time }}</div>
                     <div class="receive-frame"
                          :class="{
-                         'frame-num-lost': msg.isLost,
-                         'frame-num-error': msg.hasError,
-                         'frame-num-correct': !msg.isLost && !msg.hasError
-                       }">
+                           'frame-num-lost': msg.isLost,
+                           'frame-num-error': msg.hasError,
+                           'frame-num-correct': !msg.isLost && !msg.hasError
+                         }">
                       帧 #{{ msg.frame_count }}
                     </div>
                     <div class="receive-data">
                       <span class="data-label">数据:</span>
                       <span class="data-hex">{{ msg.data_hex }}</span>
                     </div>
-                    <!-- 移除字节数和ms显示 -->
                   </div>
 
                   <div v-if="receivedMessages.length === 0" class="empty-receive">
@@ -167,7 +166,7 @@
                 </div>
               </div>
 
-              <!-- 误码率统计 - 更新卡片 -->
+              <!-- 误码率统计 -->
               <div class="section-title">
                 <i>🎯</i>
                 <span>误码率统计</span>
@@ -352,7 +351,6 @@
               </div>
             </div>
 
-
             <!-- 消息测试指标 -->
             <div v-else-if="tab.id === 'message'" class="result-section">
               <div class="section-title">
@@ -489,7 +487,7 @@
   const sendCount = ref(0)
   const isSending = ref(false)
   const sendStatus = ref(null)
-  let sendTimer = null  // 定时器引用
+  let sendTimer = null
 
   // 接收相关
   const receivedMessages = ref([])
@@ -502,10 +500,10 @@
   // 发送的原始数据
   const sentDataHex = ref('')
 
-  // 🔧 新增：组件是否已挂载的标志
+  // 组件是否已挂载的标志
   const isMounted = ref(false)
 
-  // 🔧 新增：计算属性检查是否可以发送
+  // 计算属性检查是否可以发送
   const canSend = computed(() => {
     return isMounted.value && props.loraFileData && sseConnected.value
   })
@@ -523,66 +521,48 @@
     totalBits: 0
   })
 
-  // 🔧 修改：移除 immediate，并添加更严格的检查
+  // 监听文件数据变化
   watch(() => props.loraFileData, (newData, oldData) => {
     console.log('👀 ResultDisplay: loraFileData changed')
     console.log('  旧值长度:', oldData?.length || 0)
     console.log('  新值长度:', newData?.length || 0)
-    console.log('  isMounted:', isMounted.value)
-    console.log('  isSending:', isSending.value)
 
     if (newData) {
       sentDataHex.value = newData
       berStats.totalBits = newData.length * 4
     } else {
-      // 当数据被清空时，立即停止发送
-      console.log('⚠️ loraFileData 被清空，立即停止所有发送')
+      console.log('⚠️ loraFileData 被清空，停止所有发送')
       forceStopAll()
     }
   })
 
-  // 🔧 新增：强制停止所有操作
+  // 强制停止所有操作
   const forceStopAll = () => {
     console.log('🛑 forceStopAll: 强制停止所有操作')
 
-    // 清除定时器
     if (sendTimer) {
       clearInterval(sendTimer)
       sendTimer = null
       console.log('  ✅ 定时器已清除')
     }
 
-    // 重置状态
     isSending.value = false
     sentDataHex.value = ''
-
     console.log('  ✅ 所有操作已停止')
   }
 
   // 发送一次
   const sendOnce = async () => {
     console.log('📤 sendOnce 调用')
-    console.log('  canSend:', canSend.value)
-    console.log('  props.loraFileData:', props.loraFileData ? `${props.loraFileData.length}字符` : '无')
-    console.log('  sseConnected:', sseConnected.value)
-    console.log('  isMounted:', isMounted.value)
-    console.log('  isSending:', isSending.value)
 
-    // 🔧 使用计算属性检查
     if (!canSend.value) {
-      console.error('❌ 发送条件不满足，停止发送')
+      console.error('❌ 发送条件不满足')
       forceStopAll()
 
       if (!props.loraFileData) {
-        sendStatus.value = {
-          type: 'error',
-          message: '❌ 请先选择LoRa传输文件'
-        }
+        sendStatus.value = { type: 'error', message: '❌ 请先选择LoRa传输文件' }
       } else if (!sseConnected.value) {
-        sendStatus.value = {
-          type: 'error',
-          message: '❌ SSE未连接'
-        }
+        sendStatus.value = { type: 'error', message: '❌ SSE未连接' }
       }
       return
     }
@@ -615,18 +595,14 @@
         message: `❌ 发送失败: ${error.response?.data?.detail || error.message}`
       }
       console.error('❌ 发送失败:', error)
-      forceStopAll()  // 🔧 使用新的停止函数
+      forceStopAll()
     }
   }
 
   // 开始循环发送
   const startAutoSend = () => {
     console.log('🔄 startAutoSend 调用')
-    console.log('  canSend:', canSend.value)
-    console.log('  当前isSending:', isSending.value)
-    console.log('  当前sendTimer:', sendTimer)
 
-    // 🔧 使用计算属性检查
     if (!canSend.value) {
       console.error('❌ 发送条件不满足')
       alert('❌ 请确保已选择文件且SSE已连接')
@@ -638,30 +614,23 @@
       return
     }
 
-    // 🔧 如果已有定时器，先清理
     if (sendTimer) {
       console.warn('⚠️ 检测到遗留定时器，先清理')
       clearInterval(sendTimer)
       sendTimer = null
     }
 
-    // 清零统计
     clearStats()
     sendCount.value = 0
     isSending.value = true
 
     console.log('✅ 开始循环发送, 间隔:', sendInterval.value, '秒')
 
-    // 立即发送第一次
     sendOnce()
 
-    // 启动定时器
     sendTimer = setInterval(() => {
       console.log('⏰ 定时器触发')
-      console.log('  canSend:', canSend.value)
-      console.log('  isSending:', isSending.value)
 
-      // 🔧 增强检查
       if (!canSend.value || !isSending.value) {
         console.warn('⚠️ 条件不满足，停止发送')
         stopAutoSend()
@@ -677,8 +646,6 @@
   // 停止循环发送
   const stopAutoSend = () => {
     console.log('⏹️ stopAutoSend 调用')
-    console.log('  当前sendTimer:', sendTimer)
-    console.log('  当前isSending:', isSending.value)
 
     if (sendTimer) {
       clearInterval(sendTimer)
@@ -710,10 +677,7 @@
     receivedMessages.value = []
     sentDataHex.value = ''
     clearStats()
-    sendStatus.value = {
-      type: 'info',
-      message: 'ℹ️ 数据已清空'
-    }
+    sendStatus.value = { type: 'info', message: 'ℹ️ 数据已清空' }
   }
 
   // 格式化预览
@@ -739,9 +703,8 @@
           time: new Date().toLocaleTimeString(),
           frame_count: lostFrameNum,
           data_hex: '(丢失)',
-          data_bytes: 0,
-          duration_ms: 0,
-          isLost: true
+          isLost: true,
+          hasError: false
         })
         berStats.lostFrames++
       }
@@ -753,8 +716,6 @@
       time: new Date().toLocaleTimeString(),
       frame_count: frameCount,
       data_hex: msg.data_hex,
-      data_bytes: msg.data_bytes,
-      duration_ms: msg.duration_ms,
       isLost: false,
       hasError: false
     }
@@ -763,9 +724,8 @@
     lastReceivedFrameCount = frameCount
 
     // 计算该帧的比特错误
-    let frameHasError = false
     if (sentDataHex.value) {
-      frameHasError = checkFrameError(msg.data_hex)
+      const frameHasError = checkFrameError(msg.data_hex)
       receivedMsg.hasError = frameHasError
 
       if (frameHasError) {
@@ -837,7 +797,6 @@
 
   // 连接SSE
   const connectSSE = () => {
-    // 🔧 如果组件未挂载，不连接
     if (!isMounted.value) {
       console.log('⚠️ 组件未挂载，跳过SSE连接')
       return
@@ -891,32 +850,29 @@
   // 组件挂载
   onMounted(() => {
     console.log('🎬 ResultDisplay mounted')
-    isMounted.value = true  // 🔧 标记为已挂载
+    isMounted.value = true
     connectSSE()
   })
 
   // 组件卸载
   onUnmounted(() => {
     console.log('🛑 ResultDisplay unmounting')
-    isMounted.value = false  // 🔧 标记为未挂载
+    isMounted.value = false
 
-    // 强制停止所有操作
     forceStopAll()
 
-    // 关闭SSE
     if (eventSource) {
       eventSource.close()
       eventSource = null
       console.log('⏹️ SSE 连接已关闭')
     }
 
-    // 清空所有状态
     receivedMessages.value = []
     clearStats()
   })
 </script>
 
-  <style scoped >
+<style scoped>
   .section {
     background: rgba(255, 255, 255, 0.95);
     border-radius: 15px;
@@ -926,10 +882,10 @@
     transition: transform 0.3s ease, box-shadow 0.3s ease;
   }
 
-  .section:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-  }
+    .section:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+    }
 
   .section-header {
     background: linear-gradient(135deg, #f8f9fa, #e9ecef);
@@ -1446,6 +1402,98 @@
       background: #777;
     }
 
+  .receive-item {
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 10px;
+  display: grid;
+  grid-template-columns: 100px 120px 1fr;
+  gap: 15px;
+  align-items: center;
+  transition: all 0.3s ease;
+}
+
+.receive-item.frame-correct {
+  border-left: 4px solid #28a745;
+  background: #f8fff9;
+}
+
+.receive-item.frame-error {
+  border-left: 4px solid #ffc107;
+  background: #fffef8;
+}
+
+.receive-item.frame-lost {
+  border-left: 4px solid #dc3545;
+  background: #fff5f5;
+}
+
+.frame-num-correct {
+  color: #28a745;
+  font-weight: 700;
+}
+
+.frame-num-error {
+  color: #ffc107;
+  font-weight: 700;
+}
+
+.frame-num-lost {
+  color: #dc3545;
+  font-weight: 700;
+}
+
+.frame-lost .data-hex {
+  color: #dc3545;
+  font-style: italic;
+}
+
+.frame-error .data-hex {
+  color: #856404;
+}
+
+  .receive-list {
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+    /* 🔧 滚动条样式 */
+    .receive-list::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .receive-list::-webkit-scrollbar-track {
+      background: #f8f9fa;
+    }
+
+    .receive-list::-webkit-scrollbar-thumb {
+      background: #ced4da;
+      border-radius: 4px;
+    }
+
+      .receive-list::-webkit-scrollbar-thumb:hover {
+        background: #adb5bd;
+      }
+
+  .empty-receive {
+    text-align: center;
+    padding: 40px;
+    color: #adb5bd;
+  }
+
+    .empty-receive i {
+      font-size: 48px;
+      display: block;
+      margin-bottom: 10px;
+    }
+
+    .empty-receive p {
+      margin: 0.5rem 0;
+      font-size: 16px;
+    }
+
   /* 响应式 */
   @media (max-width: 768px) {
     .file-input-group {
@@ -1604,391 +1652,359 @@
     overflow-y: auto;
   }
 
-  .receive-item {
-    background: white;
-    border: 1px solid #e9ecef;
-    border-radius: 8px;
-    padding: 15px;
-    margin-bottom: 10px;
-    display: grid;
-    grid-template-columns: 100px 80px 1fr 150px;
-    gap: 15px;
-    align-items: center;
-  }
-
-  .receive-time {
-    font-size: 13px;
-    color: #6c757d;
-    font-family: monospace;
-  }
-
-  .receive-frame {
-    font-weight: 600;
-    color: #007bff;
-    font-size: 14px;
-  }
-
-  .receive-data {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  }
-
-  .data-hex {
-    font-family: 'Courier New', monospace;
-    color: #2c3e50;
-    font-size: 13px;
-    word-break: break-all;
-  }
-
-  .receive-stats {
-    display: flex;
-    gap: 10px;
-    font-size: 12px;
-    color: #6c757d;
-  }
-
-  .empty-receive {
-    text-align: center;
-    padding: 40px;
-    color: #adb5bd;
-  }
-
-    .empty-receive i {
-      font-size: 48px;
-      display: block;
-      margin-bottom: 10px;
-    }
-
-    .receive-item.frame-lost {
-      background: #fff5f5;
-      border-left: 3px solid #dc3545;
-    }
-
-    .frame-lost .data-hex {
-      color: #dc3545;
-      font-style: italic;
-    }
-
-    .connection-status {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 12px;
-      border-radius: 6px;
-      font-size: 13px;
-      font-weight: 500;
-      background: #f8d7da;
-      color: #721c24;
-      border: 1px solid #f5c6cb;
-    }
-
-      .connection-status.connected {
-        background: #d4edda;
-        color: #155724;
-        border: 1px solid #c3e6cb;
-      }
-
-      .connection-status .status-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: currentColor;
-      }
-
-      .connection-status.connected .status-dot {
-        animation: pulse 2s infinite;
-      }
-
-    @keyframes pulse {
-      0%, 100% {
-        opacity: 1;
-        transform: scale(1);
-      }
-
-      50% {
-        opacity: 0.6;
-        transform: scale(1.2);
-      }
-    }
-
-    .result-controls {
-      display: flex;
+  @media (max-width: 768px) {
+    .receive-item {
+      grid-template-columns: 80px 100px 1fr;
       gap: 10px;
-      align-items: center;
+      padding: 12px;
+      font-size: 12px;
     }
 
-    .send-lora-btn:disabled {
-      background: #6c757d;
-      cursor: not-allowed;
-      opacity: 0.6;
-    }
-
-    .lost-badge {
-      background: #dc3545;
-      color: white;
-      padding: 2px 8px;
-      border-radius: 4px;
+    .receive-time {
       font-size: 11px;
-      margin-left: 8px;
     }
 
-    .receive-item.frame-lost {
-      background: #fff5f5;
-      border-left: 3px solid #dc3545;
+    .receive-frame {
+      font-size: 12px;
     }
 
-    .frame-lost .data-hex {
-      color: #dc3545;
-      font-style: italic;
+    .data-hex {
+      font-size: 11px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .receive-item {
+      grid-template-columns: 1fr;
+      gap: 8px;
     }
 
-    .receive-item.frame-error {
-      background: #fff8e5;
-      border-left: 3px solid #ffc107;
+    .receive-time,
+    .receive-frame {
+      display: inline-block;
+      margin-right: 10px;
     }
 
-    .frame-error .data-hex {
-      color: #856404;
-    }
-    .send-controls {
-      display: flex;
+    .receive-data {
       flex-direction: column;
-      gap: 15px;
-      background: #f8f9fa;
-      padding: 20px;
-      border-radius: 8px;
+      align-items: flex-start;
+      gap: 4px;
+    }
+  }
+
+  .send-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    background: white;
+    padding: 25px;
+    border-radius: 10px;
+    border: 2px solid #e9ecef;
+    margin-top: 15px;
+  }
+
+  /* 🔧 发送间隔控制组 */
+  .control-group {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid #f8f9fa;
+  }
+
+    .control-group label {
+      font-weight: 600;
+      color: #2c3e50;
+      font-size: 15px;
+      min-width: 130px;
+      white-space: nowrap;
     }
 
+  .interval-input {
+    flex: 1;
+    max-width: 150px;
+    padding: 10px 15px;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    text-align: center;
+    transition: all 0.3s ease;
+  }
+
+    .interval-input:focus {
+      outline: none;
+      border-color: #007bff;
+      box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+    }
+
+  /* 🔧 按钮组布局 */
+  .control-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+  }
+
+  .send-once-btn,
+  .send-auto-btn,
+  .stop-btn {
+    padding: 14px 24px;
+    border: none;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .send-once-btn {
+    background: linear-gradient(135deg, #17a2b8, #138496);
+    color: white;
+  }
+
+    .send-once-btn:hover:not(:disabled) {
+      background: linear-gradient(135deg, #138496, #117a8b);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(23, 162, 184, 0.4);
+    }
+
+  .send-auto-btn {
+    background: linear-gradient(135deg, #28a745, #218838);
+    color: white;
+  }
+
+    .send-auto-btn:hover:not(:disabled) {
+      background: linear-gradient(135deg, #218838, #1e7e34);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+    }
+
+  .stop-btn {
+    background: linear-gradient(135deg, #dc3545, #c82333);
+    color: white;
+    grid-column: 1 / -1; /* 占满整行 */
+  }
+
+    .stop-btn:hover {
+      background: linear-gradient(135deg, #c82333, #bd2130);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);
+    }
+
+  .send-once-btn:disabled,
+  .send-auto-btn:disabled {
+    background: linear-gradient(135deg, #6c757d, #5a6268);
+    cursor: not-allowed;
+    opacity: 0.6;
+    transform: none;
+    box-shadow: none;
+  }
+
+  .send-once-btn i,
+  .send-auto-btn i,
+  .stop-btn i {
+    font-size: 18px;
+  }
+
+  /* 🔧 发送状态盒子优化 */
+  .send-status-box {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 10px;
+    border: 2px solid #e9ecef;
+  }
+
+  .status-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    border-left: 4px solid #007bff;
+    transition: all 0.3s ease;
+  }
+
+    .status-item:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+
+  .status-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .status-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: #2c3e50;
+    font-family: 'Courier New', monospace;
+  }
+
+    .status-value.sending {
+      color: #28a745;
+      animation: pulse 1.5s infinite;
+    }
+
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    50% {
+      opacity: 0.7;
+      transform: scale(1.02);
+    }
+  }
+
+  /* 🔧 操作提示优化 */
+  .send-status {
+    margin-top: 15px;
+    padding: 14px 18px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 500;
+    font-size: 14px;
+    border-left: 4px solid;
+    animation: slideIn 0.3s ease;
+  }
+
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateX(-10px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  .send-status.success {
+    background: #d4edda;
+    color: #155724;
+    border-left-color: #28a745;
+  }
+
+  .send-status.error {
+    background: #f8d7da;
+    color: #721c24;
+    border-left-color: #dc3545;
+  }
+
+  .send-status.info {
+    background: #d1ecf1;
+    color: #0c5460;
+    border-left-color: #17a2b8;
+  }
+
+  .send-status i {
+    font-size: 18px;
+  }
+
+  /* 🔧 连接状态指示器 */
+  .connection-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    background: #f8d7da;
+    color: #721c24;
+    border: 2px solid #f5c6cb;
+    transition: all 0.3s ease;
+  }
+
+    .connection-status.connected {
+      background: #d4edda;
+      color: #155724;
+      border: 2px solid #c3e6cb;
+    }
+
+    .connection-status .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .connection-status.connected .status-dot {
+      animation: pulse-dot 2s infinite;
+    }
+
+  @keyframes pulse-dot {
+    0%, 100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    50% {
+      opacity: 0.6;
+      transform: scale(1.3);
+    }
+  }
+
+  /* 🔧 响应式优化 */
+  @media (max-width: 768px) {
     .control-group {
-      display: flex;
-      align-items: center;
+      flex-direction: column;
+      align-items: stretch;
       gap: 10px;
     }
 
       .control-group label {
-        font-weight: 600;
-        color: #2c3e50;
-        min-width: 120px;
+        min-width: auto;
       }
 
     .interval-input {
-      width: 120px;
-      padding: 8px 12px;
-      border: 2px solid #e9ecef;
-      border-radius: 6px;
-      font-size: 16px;
+      max-width: none;
     }
 
-      .interval-input:focus {
-        outline: none;
-        border-color: #007bff;
-      }
-
     .control-buttons {
-      display: flex;
-      gap: 10px;
+      grid-template-columns: 1fr;
+    }
+
+    .stop-btn {
+      grid-column: 1;
+    }
+
+    .send-status-box {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .send-controls {
+      padding: 20px;
     }
 
     .send-once-btn,
     .send-auto-btn,
     .stop-btn {
-      flex: 1;
-      padding: 12px 24px;
-      border: none;
-      border-radius: 8px;
-      font-size: 16px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-    }
-
-    .send-once-btn {
-      background: #17a2b8;
-      color: white;
-    }
-
-      .send-once-btn:hover:not(:disabled) {
-        background: #138496;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(23, 162, 184, 0.3);
-      }
-
-    .send-auto-btn {
-      background: #28a745;
-      color: white;
-    }
-
-      .send-auto-btn:hover:not(:disabled) {
-        background: #218838;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
-      }
-
-    .stop-btn {
-      background: #dc3545;
-      color: white;
-    }
-
-      .stop-btn:hover {
-        background: #c82333;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
-      }
-
-    .send-once-btn:disabled,
-    .send-auto-btn:disabled {
-      background: #6c757d;
-      cursor: not-allowed;
-      opacity: 0.6;
-    }
-
-    .send-status-box {
-      display: flex;
-      gap: 20px;
-      background: white;
-      padding: 15px;
-      border-radius: 8px;
-      border: 2px solid #e9ecef;
-    }
-
-    .status-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .status-label {
-      font-weight: 600;
-      color: #6c757d;
+      padding: 12px 20px;
+      font-size: 14px;
     }
 
     .status-value {
-      font-size: 18px;
-      font-weight: 700;
-      color: #2c3e50;
+      font-size: 20px;
     }
-
-      .status-value.sending {
-        color: #28a745;
-        animation: pulse 1.5s infinite;
-      }
-
-    @keyframes pulse {
-      0%, 100% {
-        opacity: 1;
-      }
-
-      50% {
-        opacity: 0.6;
-      }
-    }
-
-    .info-tip {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 12px 16px;
-      background: #e3f2fd;
-      border-left: 4px solid #2196f3;
-      border-radius: 4px;
-      font-size: 14px;
-      color: #1565c0;
-    }
-
-    .preview-note {
-      margin-top: 10px;
-      padding: 8px 12px;
-      background: #fff3cd;
-      border-radius: 4px;
-      font-size: 13px;
-      color: #856404;
-      font-weight: 500;
-    }
-
-    .no-file-warning {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 20px;
-      background: #fff3cd;
-      border: 2px solid #ffc107;
-      border-radius: 8px;
-      color: #856404;
-      font-weight: 500;
-      font-size: 16px;
-      margin-bottom: 20px;
-    }
-
-    .selected-file-info {
-      background: #e3f2fd;
-      border: 2px solid #2196f3;
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 20px;
-    }
-
-    .file-badge {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 12px;
-      background: white;
-      border-radius: 8px;
-      margin-bottom: 15px;
-      font-weight: 500;
-    }
-
-    .file-size {
-      color: #6c757d;
-      font-size: 14px;
-    }
-
-    /* 接收数据颜色优化 */
-    .receive-item {
-      background: white;
-      border: 1px solid #e9ecef;
-      border-radius: 8px;
-      padding: 15px;
-      margin-bottom: 10px;
-      display: grid;
-      grid-template-columns: 100px 120px 1fr;
-      gap: 15px;
-      align-items: center;
-      transition: all 0.3s ease;
-    }
-
-      .receive-item.frame-correct {
-        border-left: 4px solid #28a745;
-        background: #f8fff9;
-      }
-
-      .receive-item.frame-error {
-        border-left: 4px solid #ffc107;
-        background: #fffef8;
-      }
-
-      .receive-item.frame-lost {
-        border-left: 4px solid #dc3545;
-        background: #fff5f5;
-      }
-
-    .frame-num-correct {
-      color: #28a745;
-      font-weight: 700;
-    }
-
-    .frame-num-error {
-      color: #ffc107;
-      font-weight: 700;
-    }
-
-    .frame-num-lost {
-      color: #dc3545;
-      font-weight: 700;
-    }
+  }
 </style>

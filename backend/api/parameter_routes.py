@@ -49,10 +49,9 @@ def build_uplink_registers(bandwidth: int, sf: int, coding: str, data_length: in
     base_sf = sf
     coding_rate = CODING_MAP.get(coding, 0b001)
     
-    reg1 = 0x80853 + (bw << 2)
-
+    # reg1 = 0x80853 + (bw << 2)
+    reg1 = 0x808D3 + (bw << 2)
     reg2 = ((data_length+1) << 24) + ((coding_rate+1) << 21) + (1 << 20) + (base_sf << 4) + 0x1000D
-
     
     return reg1, reg2
 
@@ -60,10 +59,8 @@ def build_downlink_register(bandwidth: int, sf: int, coding: str):
     """构建下行通道的寄存器值"""
     bw = BANDWIDTH_MAP.get(bandwidth, 0)
     coding_rate = 0 if coding == '4/5' else 1  # 下行只有4/5(0)和4/6(1)
-
-    reg = 0xD801+ (coding_rate << 8) +  (sf << 4) + (bw << 2)
-
-    
+    reg = 0x1D801 + (coding_rate << 8) + (sf << 4) + (bw << 2)
+    # reg = 0xD801 + (coding_rate << 8) + (sf << 4) + (bw << 2)
     return reg
 
 def build_interference_registers(interference, bandwidth: int):
@@ -118,7 +115,7 @@ def build_doppler_registers(doppler, bandwidth: int):
     if doppler.type == 'constant':
         rate_reg = 0  # 恒定多普勒，变化率为0
     elif doppler.type == 'linear':
-        rate_reg = int((doppler.rate / f_b) * (2**32))
+        rate_reg = int((doppler.rate / f_b/f_b) * (2**40))
     else:
         rate_reg = 0
     
@@ -128,46 +125,17 @@ def build_doppler_registers(doppler, bandwidth: int):
         (0x27, rate_reg & 0xFFFFFFFF)       # 频移变化率
     ]
 
-def init_sender(sender):
-    """初始化发送器引用"""
-    global udp_sender
-    udp_sender = sender
-
 @router.get("/parameters")
 async def get_parameters():
-    """读取所有通道参数 - 通过FPGA读取"""
+    """读取所有通道参数"""
     try:
-        logger.info("开始读取通道参数...")
+        logger.info("读取通道参数...")
         
-        # 定义地址映射
-        # 上行通道: 0x2000-0x2004
-        # 上行干扰: 0x2010-0x2014
-        # 下行通道: 0x2020-0x2024
-        address_map = {
-            "uplink": list(range(0x2000, 0x2005)),
-            "uplink_interference": list(range(0x2010, 0x2015)),
-            "downlink": list(range(0x2020, 0x2025))
+        # 返回当前缓存的参数
+        return {
+            "success": True,
+            "data": current_parameters
         }
-        
-        # 存储读取结果
-        read_success = 0
-        
-        for channel, addresses in address_map.items():
-            for i, address in enumerate(addresses):
-                # 创建等待请求
-                request_id = ResponseWaiter.create_request("fpga_read")
-                
-                # 发送FPGA读取命令
-                success, _, _ = udp_sender.send_fpga_operation(
-                    operation_type=0,
-                    address=address,
-                    target_ip="127.0.0.1"
-                )
-                
-                if not success:
-                    logger.error(f"发送FPGA读取命令失败: {channel}[{i}]")
-                    continue
-                
         
     except Exception as e:
         logger.error(f"读取参数失败: {e}")
@@ -175,9 +143,10 @@ async def get_parameters():
 
 @router.post("/parameters")
 async def write_parameters(params: AllChannelParameters):
-    """写入所有通道参数 - 通过FPGA写入"""
+    """写入所有通道参数"""
     try:
         logger.info("开始写入通道参数...")
+        
         # 收集所有写操作
         batch_operations = []
         
@@ -192,6 +161,11 @@ async def write_parameters(params: AllChannelParameters):
         batch_operations.append((0x28, reg2))
         batch_operations.append((0x60, reg1))
         batch_operations.append((0x68, reg2))
+        
+        # 射频频率 (地址: 0xFF)
+        if params.uplink.rf_frequency is not None:
+            rf_freq = int(params.uplink.rf_frequency)  # kHz
+            batch_operations.append((0xFF, rf_freq))
         
         # 2. 下行通道 (地址: 0x40)
         reg = build_downlink_register(
@@ -222,8 +196,9 @@ async def write_parameters(params: AllChannelParameters):
             operation_type=1,  # 写操作
             batch_operations=batch_operations,
             target_ip=CONFIG["arm_ip"],
-            target_port =CONFIG["arm_port"]
+            target_port=CONFIG["arm_port"]
         )
+        
         if not success:
             raise HTTPException(status_code=500, detail="FPGA写入失败")
         

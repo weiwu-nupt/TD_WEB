@@ -18,7 +18,8 @@ from udp_receiver import UDPReceiver
 from udp_sender import UDPSender
 
 # 导入API路由
-from api import udp_routes, parameter_routes, doppler_routes, lora_routes
+from api import udp_routes, parameter_routes, lora_routes, mode_routes
+from frame_processor_virtual import init_sender as init_virtual_sender
 
 
 # 创建全局实例
@@ -76,14 +77,15 @@ app.add_middleware(
 # 注入依赖到路由模块
 udp_routes.init_udp_objects(udp_receiver, udp_sender)
 parameter_routes.init_sender(udp_sender)
-doppler_routes.init_sender(udp_sender)
 lora_routes.init_sender(udp_sender)
+mode_routes.init_receiver(udp_receiver)  # 🔧 新增
+init_virtual_sender(udp_sender)  # 🔧 新增
 
 # 注册路由
 app.include_router(udp_routes.router)
 app.include_router(parameter_routes.router)
-app.include_router(doppler_routes.router)
 app.include_router(lora_routes.router)
+app.include_router(mode_routes.router)  # 🔧 新增
 
 # 根路由
 @app.get("/")

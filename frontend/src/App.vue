@@ -420,31 +420,31 @@
   })
 
   // 获取消息
-  const fetchMessages = async () => {
-    try {
-      const response = await axios.get(`${API_BASE}/udp/messages?limit=100`)
-      if (response.data.success) {
-        messages.value = response.data.data.messages
-      }
-    } catch (error) {
-      console.error('获取消息失败:', error)
-    }
-  }
+  //const fetchMessages = async () => {
+  //  try {
+  //    const response = await axios.get(`${API_BASE}/udp/messages?limit=100`)
+  //    if (response.data.success) {
+  //      messages.value = response.data.data.messages
+  //    }
+  //  } catch (error) {
+  //    console.error('获取消息失败:', error)
+  //  }
+  //}
 
-  // 开始消息轮询
-  const startMessagePolling = () => {
-    if (messagePolling.value) return
+  //// 开始消息轮询
+  //const startMessagePolling = () => {
+  //  if (messagePolling.value) return
 
-    messagePolling.value = setInterval(fetchMessages, 1000) // 每秒获取一次
-  }
+  //  messagePolling.value = setInterval(fetchMessages, 1000) // 每秒获取一次
+  //}
 
-  // 停止消息轮询
-  const stopMessagePolling = () => {
-    if (messagePolling.value) {
-      clearInterval(messagePolling.value)
-      messagePolling.value = null
-    }
-  }
+  //// 停止消息轮询
+  //const stopMessagePolling = () => {
+  //  if (messagePolling.value) {
+  //    clearInterval(messagePolling.value)
+  //    messagePolling.value = null
+  //  }
+  //}
 
   // 清空消息
   const clearMessages = async () => {
@@ -473,6 +473,24 @@
       console.error('❌ 刷新UDP状态失败:', error)
       udpStatus.connected = false
     }
+  }
+
+  const switchMode = async (mode) => {
+    try {
+      const response = await axios.post(`/api/mode/switch/${mode}`)
+      if (response.data.success) {
+        console.log(`✅ 切换到${mode}模式成功`)
+      }
+    } catch (error) {
+      console.error('模式切换失败:', error)
+    }
+  }
+
+  // 在选择系统时调用
+  const selectSystem = (system) => {
+    selectedSystem.value = system
+    const mode = system === 'ground' ? 'ground' : 'virtual'
+    switchMode(mode)
   }
 </script>
 
