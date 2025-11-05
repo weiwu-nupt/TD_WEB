@@ -53,13 +53,6 @@ current_parameters = {
         "center_frequency": 10000,
         "power": 1.0
     },
-    "uplink_interference": {
-        "bandwidth": 100000,
-        "coding": "4/6",
-        "spreading_factor": 8,
-        "center_frequency": 10200,
-        "power": 0.5
-    },
     "downlink": {
         "bandwidth": 100000,
         "coding": "4/7",

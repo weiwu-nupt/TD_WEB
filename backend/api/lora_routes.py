@@ -29,7 +29,8 @@ async def lora_send_message(msg: LoRaSendMessage):
             timing_time=msg.timing_time,
             data_content=msg.data_content,
             target_ip=CONFIG["arm_ip"],
-            target_port=CONFIG["arm_port"]
+            target_port=CONFIG["arm_port"],
+            frame_count = msg.frame_count
         )
         
         if success:
@@ -86,7 +87,7 @@ async def lora_receive_stream():
                         logger.info(f"SSE推送LoRa接收消息: 帧#{lora_info.get('frame_count', 0)}")
                 
                 # 每100ms检查一次（更快响应）
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.1)
                 
         except asyncio.CancelledError:
             logger.info("SSE客户端断开连接")

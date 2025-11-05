@@ -37,48 +37,263 @@
         </div>
       </div>
 
-      <!-- 循环显示所有通道 -->
-      <div v-for="tab in paramTabs" :key="tab.id" class="channel-card">
+      <!-- 上行通道 -->
+      <div class="channel-card">
         <div class="channel-header">
-          <i>{{ tab.icon }}</i>
-          <h3>{{ tab.name }}</h3>
+          <i>📡</i>
+          <h3>上行通道</h3>
         </div>
 
         <div class="form-grid">
-          <div v-for="(field, index) in tab.fields" :key="index" class="form-group">
-            <label :for="`field-${tab.id}-${index}`" class="field-label">{{ field.label }}</label>
-
-            <!-- 带宽下拉框 -->
-            <select v-if="field.type === 'bandwidth'"
-                    :id="`field-${tab.id}-${index}`"
-                    v-model.number="field.value"
-                    class="select-field">
+          <div class="form-group">
+            <label>带宽</label>
+            <select v-model.number="paramTabs.uplink.bandwidth" class="select-field">
               <option :value="125">125 kHz</option>
               <option :value="250">250 kHz</option>
               <option :value="500">500 kHz</option>
             </select>
+          </div>
 
-            <!-- 编码下拉框 -->
-            <select v-else-if="field.type === 'select'"
-                    :id="`field-${tab.id}-${index}`"
-                    v-model="field.value"
-                    class="select-field">
-              <option v-for="option in field.options"
-                      :key="option.value"
-                      :value="option.value">
-                {{ option.label }}
-              </option>
+          <div class="form-group">
+            <label>编码</label>
+            <select v-model="paramTabs.uplink.coding" class="select-field">
+              <option value="4/5">4/5</option>
+              <option value="4/6">4/6</option>
+              <option value="4/7">4/7</option>
+              <option value="4/8">4/8</option>
             </select>
+          </div>
 
-            <!-- 扩频因子输入框 -->
-            <input v-else-if="field.type === 'number'"
-                   :id="`field-${tab.id}-${index}`"
-                   type="number"
-                   :placeholder="field.placeholder"
-                   v-model.number="field.value"
-                   :min="field.min"
-                   :max="field.max"
+          <div class="form-group">
+            <label>扩频因子</label>
+            <input type="number"
+                   v-model.number="paramTabs.uplink.spreading_factor"
+                   placeholder="6-12"
+                   min="6"
+                   max="12"
                    class="input-field" />
+          </div>
+        </div>
+      </div>
+
+      <!-- 上行干扰 -->
+      <div class="channel-card interference-card">
+        <div class="channel-header">
+          <i>📡⚡</i>
+          <h3>上行干扰</h3>
+          <div class="interference-switch">
+            <label class="switch-label">
+              <input type="checkbox" v-model="interferenceSettings.enabled" />
+              <span>启用干扰</span>
+            </label>
+          </div>
+        </div>
+
+        <div v-if="interferenceSettings.enabled" class="interference-content">
+          <!-- 干扰模式 -->
+          <div class="form-grid">
+            <div class="form-group">
+              <label>干扰模式</label>
+              <select v-model="interferenceSettings.mode" class="select-field">
+                <option value="shared">共通道</option>
+                <option value="independent">独立通道</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>干扰类型</label>
+              <select v-model="interferenceSettings.type" class="select-field">
+                <option value="single_tone">单音噪声</option>
+                <option value="low_noise">底噪</option>
+                <option value="channel_noise">通道噪声</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- 单音噪声参数 -->
+          <div v-if="interferenceSettings.type === 'single_tone'" class="form-grid">
+            <div class="form-group">
+              <label>中心频率</label>
+              <div class="input-with-unit">
+                <input type="number"
+                       v-model.number="interferenceSettings.center_frequency"
+                       placeholder="0"
+                       class="input-field" />
+                <span class="unit-label">Hz</span>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>噪声功率</label>
+              <div class="input-with-unit">
+                <input type="number"
+                       v-model.number="interferenceSettings.power"
+                       placeholder="0"
+                       class="input-field" />
+                <span class="unit-label">dBm</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 底噪参数 -->
+          <div v-else-if="interferenceSettings.type === 'low_noise'" class="form-grid">
+            <div class="form-group">
+              <label>噪声功率</label>
+              <div class="input-with-unit">
+                <input type="number"
+                       v-model.number="interferenceSettings.power"
+                       placeholder="0"
+                       class="input-field" />
+                <span class="unit-label">dBm</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 通道噪声参数 -->
+          <div v-else-if="interferenceSettings.type === 'channel_noise'" class="form-grid">
+            <div class="form-group">
+              <label>扩频因子</label>
+              <input type="number"
+                     v-model.number="interferenceSettings.spreading_factor"
+                     placeholder="6-12"
+                     min="6"
+                     max="12"
+                     class="input-field" />
+            </div>
+
+            <div class="form-group">
+              <label>噪声功率</label>
+              <div class="input-with-unit">
+                <input type="number"
+                       v-model.number="interferenceSettings.power"
+                       placeholder="0"
+                       class="input-field" />
+                <span class="unit-label">dBm</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 独立通道参数（仅在独立通道模式下显示）-->
+          <div v-if="interferenceSettings.mode === 'independent'" class="form-grid">
+            <div class="form-group">
+              <label>带宽</label>
+              <select v-model.number="paramTabs.uplink_interference.bandwidth" class="select-field">
+                <option :value="125">125 kHz</option>
+                <option :value="250">250 kHz</option>
+                <option :value="500">500 kHz</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>编码</label>
+              <select v-model="paramTabs.uplink_interference.coding" class="select-field">
+                <option value="4/5">4/5</option>
+                <option value="4/6">4/6</option>
+                <option value="4/7">4/7</option>
+                <option value="4/8">4/8</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>扩频因子</label>
+              <input type="number"
+                     v-model.number="paramTabs.uplink_interference.spreading_factor"
+                     placeholder="6-12"
+                     min="6"
+                     max="12"
+                     class="input-field" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 下行通道 -->
+      <div class="channel-card">
+        <div class="channel-header">
+          <i>📶</i>
+          <h3>下行通道</h3>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label>带宽</label>
+            <select v-model.number="paramTabs.downlink.bandwidth" class="select-field">
+              <option :value="125">125 kHz</option>
+              <option :value="250">250 kHz</option>
+              <option :value="500">500 kHz</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>编码</label>
+            <select v-model="paramTabs.downlink.coding" class="select-field">
+              <option value="4/5">4/5</option>
+              <option value="4/6">4/6</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>扩频因子</label>
+            <input type="number"
+                   v-model.number="paramTabs.downlink.spreading_factor"
+                   placeholder="6-12"
+                   min="6"
+                   max="12"
+                   class="input-field" />
+          </div>
+        </div>
+      </div>
+
+      <!-- 多普勒设置 -->
+      <div class="channel-card doppler-card">
+        <div class="channel-header">
+          <i>🌊</i>
+          <h3>多普勒设置</h3>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label>多普勒类型</label>
+            <select v-model="dopplerSettings.type" class="select-field">
+              <option value="none">无多普勒</option>
+              <option value="constant">恒定多普勒</option>
+              <option value="linear">线性多普勒</option>
+            </select>
+          </div>
+        </div>
+
+        <div v-if="dopplerSettings.type !== 'none'" class="frequency-range-group">
+          <label class="range-label">频移范围</label>
+          <div class="range-inputs">
+            <div class="range-input-wrapper">
+              <span class="input-prefix">下限</span>
+              <input type="number"
+                     v-model.number="dopplerSettings.frequencyMin"
+                     placeholder="-1000"
+                     class="range-input" />
+              <span class="input-suffix">Hz</span>
+            </div>
+            <span class="range-separator">~</span>
+            <div class="range-input-wrapper">
+              <span class="input-prefix">上限</span>
+              <input type="number"
+                     v-model.number="dopplerSettings.frequencyMax"
+                     placeholder="1000"
+                     class="range-input" />
+              <span class="input-suffix">Hz</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 线性变化率 -->
+        <div v-if="dopplerSettings.type === 'linear'" class="form-group">
+          <label>变化率</label>
+          <div class="input-with-unit">
+            <input type="number"
+                   v-model.number="dopplerSettings.rate"
+                   placeholder="10"
+                   class="input-field" />
+            <span class="unit-label">Hz/s</span>
           </div>
         </div>
       </div>
@@ -104,12 +319,11 @@
 </template>
 
 <script setup lang="ts">
-  import { ref, reactive } from 'vue'
+  import { ref, reactive, computed } from 'vue'
   import axios from 'axios'
 
   const API_BASE = '/api'
 
-  // 定义 emit
   const emit = defineEmits(['file-selected'])
 
   // LoRa文件相关
@@ -117,60 +331,46 @@
   const loraFileName = ref('')
   const loraFileData = ref('')
 
-  const paramTabs = reactive([
-    {
-      id: 'uplink',
-      name: '上行通道',
-      icon: '📡',
-      fields: [
-        { label: '带宽', type: 'bandwidth', value: 125, key: 'bandwidth' },
-        {
-          label: '编码', type: 'select', value: '4/5', key: 'coding',
-          options: [
-            { label: '4/5', value: '4/5' },
-            { label: '4/6', value: '4/6' },
-            { label: '4/7', value: '4/7' },
-            { label: '4/8', value: '4/8' }
-          ]
-        },
-        { label: '扩频因子', type: 'number', value: 9, min: 6, max: 12, placeholder: '6-12', key: 'spreading_factor' }
-      ]
+  // 通道参数
+  const paramTabs = reactive({
+    uplink: {
+      bandwidth: 125,
+      coding: '4/5',
+      spreading_factor: 9
     },
-    {
-      id: 'uplink_interference',
-      name: '上行通道(干扰)',
-      icon: '📡⚡',
-      fields: [
-        { label: '带宽', type: 'bandwidth', value: 125, key: 'bandwidth' },
-        {
-          label: '编码', type: 'select', value: '4/6', key: 'coding',
-          options: [
-            { label: '4/5', value: '4/5' },
-            { label: '4/6', value: '4/6' },
-            { label: '4/7', value: '4/7' },
-            { label: '4/8', value: '4/8' }
-          ]
-        },
-        { label: '扩频因子', type: 'number', value: 8, min: 6, max: 12, placeholder: '6-12', key: 'spreading_factor' }
-      ]
-    },
-    {
-      id: 'downlink',
-      name: '下行通道',
-      icon: '📶',
-      fields: [
-        { label: '带宽', type: 'bandwidth', value: 125, key: 'bandwidth' },
-        {
-          label: '编码', type: 'select', value: '4/5', key: 'coding',
-          options: [
-            { label: '4/5', value: '4/5' },
-            { label: '4/6', value: '4/6' }
-          ]
-        },
-        { label: '扩频因子', type: 'number', value: 10, min: 6, max: 12, placeholder: '6-12', key: 'spreading_factor' }
-      ]
+    downlink: {
+      bandwidth: 125,
+      coding: '4/5',
+      spreading_factor: 10
     }
-  ])
+  })
+
+  // 干扰设置
+  const interferenceSettings = reactive({
+    enabled: false,
+    mode: 'shared',  // 'shared' 或 'independent'
+    type: 'single_tone',  // 'single_tone', 'low_noise', 'channel_noise'
+    center_frequency: 0,
+    power: 0,
+    spreading_factor: 7
+  })
+
+  // 多普勒设置
+  const dopplerSettings = reactive({
+    type: 'none',  // 'none', 'constant', 'linear'
+    frequencyMin: -1000,
+    frequencyMax: 1000,
+    rate: 10
+  })
+
+  // 计算f_b (基带频率)
+  const f_b = computed(() => {
+    const bw = paramTabs.uplink.bandwidth
+    if (bw === 125) return 1e6
+    if (bw === 250) return 2e6
+    if (bw === 500) return 4e6
+    return 1e6
+  })
 
   // 处理LoRa文件选择
   const handleLoraFileSelect = async (event) => {
@@ -193,8 +393,6 @@
       }
 
       loraFileData.value = cleanHex
-
-      // 发送给App.vue
       emit('file-selected', loraFileName.value, loraFileData.value)
 
       console.log(`✅ LoRa文件读取成功: ${cleanHex.length / 2} 字节`)
@@ -220,16 +418,15 @@
       if (response.data.success) {
         const data = response.data.data
 
-        paramTabs.forEach(tab => {
-          const channelData = data[tab.id]
-          if (channelData) {
-            tab.fields.forEach(field => {
-              if (field.key && channelData[field.key] !== undefined) {
-                field.value = channelData[field.key]
-              }
-            })
-          }
-        })
+        // 更新通道参数
+        if (data.uplink) Object.assign(paramTabs.uplink, data.uplink)
+        if (data.downlink) Object.assign(paramTabs.downlink, data.downlink)
+
+        // 更新干扰设置
+        if (data.interference) Object.assign(interferenceSettings, data.interference)
+
+        // 更新多普勒设置
+        if (data.doppler) Object.assign(dopplerSettings, data.doppler)
 
         console.log('参数读取成功:', data)
         alert('✅ 参数读取成功')
@@ -250,19 +447,13 @@
     }
 
     try {
-      // 构建参数对象
       const params = {
-        lora_data_length: loraFileData.value.length / 2  // 字节数
+        lora_data_length: loraFileData.value.length / 2,
+        uplink: paramTabs.uplink,
+        downlink: paramTabs.downlink,
+        interference: interferenceSettings,
+        doppler: dopplerSettings
       }
-
-      paramTabs.forEach(tab => {
-        params[tab.id] = {}
-        tab.fields.forEach(field => {
-          if (field.key) {
-            params[tab.id][field.key] = field.value
-          }
-        })
-      })
 
       console.log('准备写入参数:', params)
 
@@ -316,6 +507,10 @@
     margin: 0;
   }
 
+  .tab-content {
+    padding: 30px;
+  }
+
   .channel-card {
     background: #f8f9fa;
     border: 2px solid #e9ecef;
@@ -328,6 +523,24 @@
     .channel-card:hover {
       border-color: #007bff;
       box-shadow: 0 8px 20px rgba(0, 123, 255, 0.1);
+    }
+
+  .interference-card {
+    border-color: #ffc107;
+  }
+
+    .interference-card:hover {
+      border-color: #ff9800;
+      box-shadow: 0 8px 20px rgba(255, 152, 0, 0.15);
+    }
+
+  .doppler-card {
+    border-color: #28a745;
+  }
+
+    .doppler-card:hover {
+      border-color: #20c997;
+      box-shadow: 0 8px 20px rgba(32, 201, 151, 0.15);
     }
 
   .channel-header {
@@ -348,7 +561,31 @@
       color: #2c3e50;
       font-size: 18px;
       font-weight: 600;
+      flex: 1;
     }
+
+  .interference-switch {
+    margin-left: auto;
+  }
+
+  .switch-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    color: #6c757d;
+  }
+
+    .switch-label input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+
+  .interference-content {
+    margin-top: 20px;
+  }
 
   .form-grid {
     display: grid;
@@ -362,12 +599,12 @@
     gap: 8px;
   }
 
-  .field-label {
-    font-weight: 600;
-    color: #2c3e50;
-    font-size: 14px;
-    margin-bottom: 4px;
-  }
+    .form-group label {
+      font-weight: 600;
+      color: #2c3e50;
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
 
   .input-field,
   .select-field {
@@ -386,75 +623,92 @@
       box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
     }
 
-    .input-field::placeholder {
-      color: #adb5bd;
-    }
-
   .select-field {
     cursor: pointer;
   }
 
-  .action-buttons {
+  .input-with-unit {
     display: flex;
-    justify-content: flex-end;
-    gap: 15px;
-    margin-top: 25px;
-    padding-top: 20px;
-    border-top: 2px solid #e9ecef;
+    align-items: center;
+    gap: 10px;
   }
 
-  .read-button,
-  .write-button {
-    padding: 12px 30px;
-    border: none;
-    border-radius: 8px;
-    font-size: 16px;
+    .input-with-unit .input-field {
+      flex: 1;
+    }
+
+  .unit-label {
+    font-size: 14px;
     font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
+    color: #6c757d;
+    background: #e9ecef;
+    padding: 12px 16px;
+    border-radius: 8px;
+    white-space: nowrap;
+  }
+
+  /* 频移范围样式 */
+  .frequency-range-group {
+    margin-top: 20px;
+  }
+
+  .range-label {
+    display: block;
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 14px;
+    margin-bottom: 10px;
+  }
+
+  .range-inputs {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 10px;
+    border: 2px solid #e9ecef;
+  }
+
+  .range-input-wrapper {
+    flex: 1;
     display: flex;
     align-items: center;
     gap: 8px;
+    background: white;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
   }
 
-  .read-button {
-    background: #17a2b8;
-    color: white;
+  .input-prefix,
+  .input-suffix {
+    font-size: 13px;
+    color: #6c757d;
+    font-weight: 500;
+    white-space: nowrap;
   }
 
-    .read-button:hover {
-      background: #138496;
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(23, 162, 184, 0.3);
-    }
-
-  .write-button {
-    background: #28a745;
-    color: white;
+  .range-input {
+    flex: 1;
+    border: none;
+    outline: none;
+    font-size: 16px;
+    font-weight: 600;
+    color: #2c3e50;
+    padding: 4px;
+    text-align: center;
+    min-width: 80px;
+    font-family: 'Courier New', monospace;
   }
 
-    .write-button:hover {
-      background: #218838;
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
-    }
-
-  @media (max-width: 768px) {
-    .form-grid {
-      grid-template-columns: 1fr;
-    }
-
-    .action-buttons {
-      flex-direction: column;
-    }
-
-    .read-button,
-    .write-button {
-      width: 100%;
-      justify-content: center;
-    }
+  .range-separator {
+    font-size: 20px;
+    color: #6c757d;
+    font-weight: bold;
   }
 
+  /* 文件选择样式 */
   .file-section {
     background: #e3f2fd;
     border: 2px solid #2196f3;
@@ -547,6 +801,64 @@
     border-radius: 4px;
   }
 
+  /* 按钮样式 */
+  .action-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 15px;
+    margin-top: 25px;
+    padding-top: 20px;
+    border-top: 2px solid #e9ecef;
+  }
+
+  .read-button,
+  .write-button {
+    padding: 12px 30px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .read-button {
+    background: #17a2b8;
+    color: white;
+  }
+
+    .read-button:hover {
+      background: #138496;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(23, 162, 184, 0.3);
+    }
+
+  .write-button {
+    background: #28a745;
+    color: white;
+  }
+
+    .write-button:hover {
+      background: #218838;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+    }
+
+    .write-button:disabled {
+      background: #9e9e9e;
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
+      .write-button:disabled:hover {
+        background: #9e9e9e;
+        transform: none;
+        box-shadow: none;
+      }
+
   .warning-tip {
     padding: 12px 20px;
     background: #fff3cd;
@@ -557,15 +869,27 @@
     text-align: center;
   }
 
-  .write-button:disabled {
-    background: #9e9e9e;
-    cursor: not-allowed;
-    opacity: 0.6;
-  }
-
-    .write-button:disabled:hover {
-      background: #9e9e9e;
-      transform: none;
-      box-shadow: none;
+  @media (max-width: 768px) {
+    .form-grid {
+      grid-template-columns: 1fr;
     }
+
+    .action-buttons {
+      flex-direction: column;
+    }
+
+    .read-button,
+    .write-button {
+      width: 100%;
+      justify-content: center;
+    }
+
+    .range-inputs {
+      flex-direction: column;
+    }
+
+    .range-separator {
+      transform: rotate(90deg);
+    }
+  }
 </style>

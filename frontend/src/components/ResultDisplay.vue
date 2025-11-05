@@ -465,7 +465,7 @@
 </template>
 
 <script setup>
-  import { ref, reactive, onMounted, onUnmounted, watch } from 'vue'
+  import { ref, reactive, onMounted, onUnmounted, watch, computed } from 'vue'
   import axios from 'axios'
 
   const API_BASE = '/api'
@@ -502,6 +502,14 @@
   // 发送的原始数据
   const sentDataHex = ref('')
 
+  // 🔧 新增：组件是否已挂载的标志
+  const isMounted = ref(false)
+
+  // 🔧 新增：计算属性检查是否可以发送
+  const canSend = computed(() => {
+    return isMounted.value && props.loraFileData && sseConnected.value
+  })
+
   // 误码率统计
   const berStats = reactive({
     totalFrames: 0,
@@ -515,32 +523,67 @@
     totalBits: 0
   })
 
-  // 监听props变化
-  watch(() => props.loraFileData, (newData) => {
-    console.log('👀 ResultDisplay: loraFileData changed, length:', newData?.length || 0)
+  // 🔧 修改：移除 immediate，并添加更严格的检查
+  watch(() => props.loraFileData, (newData, oldData) => {
+    console.log('👀 ResultDisplay: loraFileData changed')
+    console.log('  旧值长度:', oldData?.length || 0)
+    console.log('  新值长度:', newData?.length || 0)
+    console.log('  isMounted:', isMounted.value)
+    console.log('  isSending:', isSending.value)
+
     if (newData) {
       sentDataHex.value = newData
       berStats.totalBits = newData.length * 4
+    } else {
+      // 当数据被清空时，立即停止发送
+      console.log('⚠️ loraFileData 被清空，立即停止所有发送')
+      forceStopAll()
     }
-  }, { immediate: true })
+  })
+
+  // 🔧 新增：强制停止所有操作
+  const forceStopAll = () => {
+    console.log('🛑 forceStopAll: 强制停止所有操作')
+
+    // 清除定时器
+    if (sendTimer) {
+      clearInterval(sendTimer)
+      sendTimer = null
+      console.log('  ✅ 定时器已清除')
+    }
+
+    // 重置状态
+    isSending.value = false
+    sentDataHex.value = ''
+
+    console.log('  ✅ 所有操作已停止')
+  }
 
   // 发送一次
   const sendOnce = async () => {
-    console.log('📤 sendOnce调用')
-    console.log('  props.loraFileData:', props.loraFileData ? '有数据' : '无数据')
+    console.log('📤 sendOnce 调用')
+    console.log('  canSend:', canSend.value)
+    console.log('  props.loraFileData:', props.loraFileData ? `${props.loraFileData.length}字符` : '无')
     console.log('  sseConnected:', sseConnected.value)
+    console.log('  isMounted:', isMounted.value)
+    console.log('  isSending:', isSending.value)
 
-    if (!props.loraFileData) {
-      console.error('❌ 没有文件数据，停止发送')
-      stopAutoSend()  // 强制停止
-      alert('请先在"参数设置"页面选择文件')
-      return
-    }
+    // 🔧 使用计算属性检查
+    if (!canSend.value) {
+      console.error('❌ 发送条件不满足，停止发送')
+      forceStopAll()
 
-    if (!sseConnected.value) {
-      console.error('❌ SSE未连接，停止发送')
-      stopAutoSend()  // 强制停止
-      alert('SSE未连接,请等待连接成功')
+      if (!props.loraFileData) {
+        sendStatus.value = {
+          type: 'error',
+          message: '❌ 请先选择LoRa传输文件'
+        }
+      } else if (!sseConnected.value) {
+        sendStatus.value = {
+          type: 'error',
+          message: '❌ SSE未连接'
+        }
+      }
       return
     }
 
@@ -550,7 +593,7 @@
         sendCount.value = 1
       }
 
-      console.log(`📨 发送帧#${sendCount.value}`)
+      console.log(`📨 准备发送帧#${sendCount.value}`)
 
       const response = await axios.post(`${API_BASE}/lora/send`, {
         timing_enable: 0,
@@ -572,25 +615,34 @@
         message: `❌ 发送失败: ${error.response?.data?.detail || error.message}`
       }
       console.error('❌ 发送失败:', error)
-      stopAutoSend()  // 发送失败时停止
+      forceStopAll()  // 🔧 使用新的停止函数
     }
   }
 
   // 开始循环发送
   const startAutoSend = () => {
-    console.log('🔄 startAutoSend调用')
-    console.log('  props.loraFileData:', props.loraFileData ? '有数据' : '无数据')
-    console.log('  sseConnected:', sseConnected.value)
+    console.log('🔄 startAutoSend 调用')
+    console.log('  canSend:', canSend.value)
     console.log('  当前isSending:', isSending.value)
+    console.log('  当前sendTimer:', sendTimer)
 
-    if (!props.loraFileData || !sseConnected.value) {
-      console.error('❌ 条件不满足，无法开始循环发送')
+    // 🔧 使用计算属性检查
+    if (!canSend.value) {
+      console.error('❌ 发送条件不满足')
+      alert('❌ 请确保已选择文件且SSE已连接')
       return
     }
 
     if (isSending.value) {
-      console.warn('⚠️ 已经在循环发送中，忽略重复调用')
+      console.warn('⚠️ 已经在循环发送中')
       return
+    }
+
+    // 🔧 如果已有定时器，先清理
+    if (sendTimer) {
+      console.warn('⚠️ 检测到遗留定时器，先清理')
+      clearInterval(sendTimer)
+      sendTimer = null
     }
 
     // 清零统计
@@ -605,13 +657,18 @@
 
     // 启动定时器
     sendTimer = setInterval(() => {
-      console.log('⏰ 定时器触发, isSending:', isSending.value)
-      if (isSending.value) {
-        sendOnce()
-      } else {
-        console.warn('⚠️ isSending为false，但定时器还在运行，清除定时器')
+      console.log('⏰ 定时器触发')
+      console.log('  canSend:', canSend.value)
+      console.log('  isSending:', isSending.value)
+
+      // 🔧 增强检查
+      if (!canSend.value || !isSending.value) {
+        console.warn('⚠️ 条件不满足，停止发送')
         stopAutoSend()
+        return
       }
+
+      sendOnce()
     }, sendInterval.value * 1000)
 
     console.log('✅ 定时器已启动, ID:', sendTimer)
@@ -619,18 +676,18 @@
 
   // 停止循环发送
   const stopAutoSend = () => {
-    console.log('⏹️ stopAutoSend调用')
+    console.log('⏹️ stopAutoSend 调用')
     console.log('  当前sendTimer:', sendTimer)
     console.log('  当前isSending:', isSending.value)
 
     if (sendTimer) {
       clearInterval(sendTimer)
       sendTimer = null
-      console.log('✅ 定时器已清除')
+      console.log('  ✅ 定时器已清除')
     }
 
     isSending.value = false
-    console.log('✅ isSending已设置为false')
+    console.log('  ✅ isSending已设置为false')
   }
 
   // 清零统计
@@ -780,6 +837,12 @@
 
   // 连接SSE
   const connectSSE = () => {
+    // 🔧 如果组件未挂载，不连接
+    if (!isMounted.value) {
+      console.log('⚠️ 组件未挂载，跳过SSE连接')
+      return
+    }
+
     if (eventSource) {
       eventSource.close()
     }
@@ -811,7 +874,7 @@
       console.error('❌ SSE 连接错误')
 
       setTimeout(() => {
-        if (!sseConnected.value) {
+        if (!sseConnected.value && isMounted.value) {
           console.log('🔄 尝试重新连接SSE...')
           connectSSE()
         }
@@ -828,15 +891,17 @@
   // 组件挂载
   onMounted(() => {
     console.log('🎬 ResultDisplay mounted')
+    isMounted.value = true  // 🔧 标记为已挂载
     connectSSE()
   })
 
-  // 组件卸载 - 重要！！！
+  // 组件卸载
   onUnmounted(() => {
-    console.log('🛑 ResultDisplay unmounting, 清理资源')
+    console.log('🛑 ResultDisplay unmounting')
+    isMounted.value = false  // 🔧 标记为未挂载
 
-    // 强制停止发送
-    stopAutoSend()
+    // 强制停止所有操作
+    forceStopAll()
 
     // 关闭SSE
     if (eventSource) {
@@ -844,6 +909,10 @@
       eventSource = null
       console.log('⏹️ SSE 连接已关闭')
     }
+
+    // 清空所有状态
+    receivedMessages.value = []
+    clearStats()
   })
 </script>
 

@@ -13,28 +13,35 @@ class UDPMessage(BaseModel):
     message: str
     target_ip: str = "127.0.0.1"
 
-# 通道参数模型
 class ChannelParameters(BaseModel):
-    """通道参数模型"""
-    bandwidth: int              # 带宽(125/250/500 kHz)
-    coding: str                 # 编码(4/5, 4/6, 4/7, 4/8)
-    spreading_factor: int       # 扩频因子(6-12)
+    """单个通道参数"""
+    bandwidth: int  # 125, 250, 500
+    spreading_factor: int  # 6-12
+    coding: str  # '4/5', '4/6', '4/7', '4/8'
+
+class InterferenceSettings(BaseModel):
+    """干扰设置"""
+    enabled: bool = False
+    mode: str = 'shared'  # 'shared' 或 'independent'
+    type: str = 'single_tone'  # 'single_tone', 'low_noise', 'channel_noise'
+    center_frequency: float = 0
+    power: float = 0
+    spreading_factor: int = 7
+
+class DopplerSettings(BaseModel):
+    """多普勒设置"""
+    type: str = 'none'  # 'none', 'constant', 'linear'
+    frequencyMin: float = -1000
+    frequencyMax: float = 1000
+    rate: float = 10
 
 class AllChannelParameters(BaseModel):
     """所有通道参数"""
+    lora_data_length: int
     uplink: ChannelParameters
-    uplink_interference: ChannelParameters
     downlink: ChannelParameters
-    lora_data_length: int  # LoRa数据长度(字节)
-
-# 多普勒设置模型
-class DopplerSettings(BaseModel):
-    """多普勒设置模型"""
-    type: str                        # 'none', 'constant', 'linear', 'sinusoidal', 'random'
-    frequencyMin: int                # 频移下限(Hz)
-    frequencyMax: int                # 频移上限(Hz)
-    rate: Optional[float] = None     # 变化率(Hz/s) - 用于线性
-    period: Optional[float] = None   # 周期(s) - 用于正弦
+    interference: InterferenceSettings
+    doppler: DopplerSettings
 
 # FPGA操作模型
 class FPGAReadRequest(BaseModel):

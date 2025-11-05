@@ -25,7 +25,7 @@
 
       <main class="main-content">
         <ParameterSettings @file-selected="handleFileSelected" />
-        <SceneSettings />
+        <!-- 🔧 移除 SceneSettings -->
         <ResultDisplay :active-tab="activeResultTab"
                        :lora-file-name="sharedLoraFileName"
                        :lora-file-data="sharedLoraFileData"
@@ -164,11 +164,10 @@
 </template>
 
 <script setup lang="ts">
-  import { ref, reactive, nextTick, onMounted, onUnmounted } from 'vue'
+  import { ref, reactive, nextTick, onMounted, onUnmounted, watch } from 'vue'
   import axios from 'axios'
   import AppHeader from './components/AppHeader.vue'
   import ParameterSettings from './components/ParameterSettings.vue'
-  import SceneSettings from './components/SceneSettings.vue'
   import ResultDisplay from './components/ResultDisplay.vue'
 
   // 初始状态：空字符串表示显示选择界面
@@ -184,6 +183,13 @@
     sharedLoraFileName.value = fileName
     sharedLoraFileData.value = fileData
     console.log(`✅ App接收到文件: ${fileName}, ${fileData.length / 2} 字节`)
+  }
+
+  // 清空文件数据的函数
+  const clearFileData = () => {
+    sharedLoraFileName.value = ''
+    sharedLoraFileData.value = ''
+    console.log('🧹 文件数据已清空')
   }
 
   // 在虚实融合系统的数据中添加
@@ -393,9 +399,20 @@
 
   // 监听选择的系统变化
   import { watch } from 'vue'
-  watch(selectedSystem, (newValue) => {
-    handleSystemChange(newValue)
-  })
+  //watch(selectedSystem, (newValue) => {
+  //  handleSystemChange(newValue)
+  //})
+
+  watch(selectedSystem, (newValue, oldValue) => {
+  console.log(`🔄 系统切换: ${oldValue} -> ${newValue}`)
+  
+  // 当从地面检测系统切换到其他系统时，清空文件数据
+  if (oldValue === 'ground' && newValue !== 'ground') {
+    clearFileData()
+  }
+  
+  handleSystemChange(newValue)
+})
 
   // 组件卸载时清理
   onUnmounted(() => {
@@ -442,6 +459,21 @@
   }
 
   console.log('App.vue 已加载，selectedSystem 初始值:', selectedSystem.value)
+
+  // 刷新UDP状态
+  const refreshStatus = async () => {
+    try {
+      const response = await axios.get(`${API_BASE}/udp/config`)
+
+      if (response.data.success) {
+        udpStatus.connected = response.data.receiver_status.running
+        console.log('✅ UDP状态刷新成功')
+      }
+    } catch (error) {
+      console.error('❌ 刷新UDP状态失败:', error)
+      udpStatus.connected = false
+    }
+  }
 </script>
 
 <style scoped>
