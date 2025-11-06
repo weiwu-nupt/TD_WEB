@@ -186,6 +186,10 @@
   // 返回选择界面
   const returnToSelection = () => {
     console.log('🔙 返回系统选择')
+
+    // 🔧 先断开SSE连接
+    disconnectVirtualSSE()
+
     selectedSystem.value = ''
 
     if (sharedLoraFileData.value) {
@@ -193,14 +197,23 @@
     }
   }
 
+  // 🔧 断开虚实融合SSE
+  const disconnectVirtualSSE = () => {
+    if (virtualEventSource) {
+      console.log('🔌 断开虚实融合SSE连接')
+      virtualEventSource.close()
+      virtualEventSource = null
+      virtualSseConnected.value = false
+    }
+  }
+
   // 🔧 连接虚实融合SSE
   const connectVirtualSSE = () => {
-    if (virtualEventSource) {
-      virtualEventSource.close()
-    }
+    // 先断开现有连接
+    disconnectVirtualSSE()
 
     console.log('🔗 正在连接虚实融合SSE...')
-    virtualEventSource = new EventSource(`${API_BASE}/virtual/stream`)  // 🔧 使用新端点
+    virtualEventSource = new EventSource(`${API_BASE}/virtual/stream`)
 
     virtualEventSource.onopen = () => {
       virtualSseConnected.value = true
@@ -225,6 +238,7 @@
       virtualSseConnected.value = false
       console.error('❌ 虚实融合SSE 连接错误')
 
+      // 🔧 只在虚实融合模式下才重连
       setTimeout(() => {
         if (selectedSystem.value === 'mixed') {
           console.log('🔄 尝试重新连接虚实融合SSE...')
@@ -300,19 +314,22 @@
     console.log(`🔄 handleSystemChange: ${system}`)
 
     if (system === 'mixed') {
+      // 🔧 切换到虚实融合模式 - 连接SSE
       connectVirtualSSE()
     } else {
-      if (virtualEventSource) {
-        virtualEventSource.close()
-        virtualEventSource = null
-        virtualSseConnected.value = false
-      }
+      // 🔧 切换到其他模式 - 断开SSE
+      disconnectVirtualSSE()
     }
   }
 
   // 监听系统切换
   watch(selectedSystem, (newValue, oldValue) => {
     console.log(`🔄 系统切换: ${oldValue} -> ${newValue}`)
+
+    // 🔧 切换时先断开旧的SSE连接
+    if (oldValue === 'mixed') {
+      disconnectVirtualSSE()
+    }
 
     if (oldValue === 'ground' && newValue !== 'ground') {
       clearFileData()
@@ -327,13 +344,12 @@
   })
 
   // 组件卸载
-  onUnmounted(() => {
-    console.log('🛑 App.vue 卸载')
-
-    if (virtualEventSource) {
-      virtualEventSource.close()
-    }
-  })
+onUnmounted(() => {
+  console.log('🛑 App.vue 卸载')
+  
+  // 🔧 断开SSE连接
+  disconnectVirtualSSE()
+})
 </script>
 
 <style scoped>

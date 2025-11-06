@@ -15,7 +15,7 @@ from config import (
     FRAME_TYPE_VIRTUAL_LINK
 )
 from frame_parser import build_message
-from udp_receiver import get_message_queue
+from udp_receiver import get_message_queue, get_queue_lock
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +82,7 @@ class VirtualMonitor:
                     time.sleep(self.poll_interval)
                     continue
                 
-                 # 🔧 步骤1: 发送读寄存器请求
+                # 🔧 步骤1: 发送读寄存器请求
                 self._send_read_registers_request()
                 
                 # 🔧 步骤2: 短暂等待响应
@@ -145,56 +145,53 @@ def _process_register_responses(self):
     """
     try:
         message_queue = get_message_queue()
+        queue_lock = get_queue_lock()
     
-        if not message_queue:
-            return
+        with queue_lock:
+            if not message_queue:
+                return
         
-        # 🔧 收集需要移除的消息索引
-        messages_to_remove = []
-        
-        # 🔧 遍历队列，查找并处理所有 0x05 消息
-        for idx, msg in enumerate(list(message_queue)):
-            # 只处理 FPGA 操作帧响应
-            if msg.get("message_type") != 0x05:
-                continue
-        
-            # 获取 FPGA 操作信息
-            fpga_info = msg.get("fpga_operation_info")
-            if not fpga_info:
-                continue
-    
-            if fpga_info.get("operation_type_code") != 0:  
-                continue
-        
-            # 提取寄存器数据
+            # 🔧 收集需要移除的消息索引
+            fpga_message_indices = []
+            
+            for idx, msg in enumerate(list(message_queue)):
+                if msg.get("message_type") == 0x05:
+                    fpga_info = msg.get("fpga_operation_info")
+                    if fpga_info and fpga_info.get("operation_type_code") == 0:
+                        fpga_message_indices.append(idx)
+            
+            if not fpga_message_indices:
+                return
+            
+            # 🔧 只处理最后一个 0x05 消息
+            last_fpga_idx = fpga_message_indices[-1]
+            last_msg = message_queue[last_fpga_idx]
+            
+            fpga_info = last_msg.get("fpga_operation_info")
             operations = fpga_info.get("operations", [])
         
             for op in operations:
-                address = op.get("address")
-                value = op.get("value")
+                    address = op.get("address")
+                    value = op.get("value")
             
-                if address is None or value is None:
-                    continue
+                    if address is None or value is None:
+                        continue  
             
-                # 🔧 更新寄存器缓存
-                if address == 0x25:
-                    self.reg_0x25 = value
-                elif address == 0x26:
-                    self.reg_0x26 = value
-                elif address == 0x45:
-                    self.reg_0x45 = value
-                elif address == 0x46:
-                    self.reg_0x46 = value
-            
-            # 🔧 标记为待移除
-            messages_to_remove.append(idx)
-        
-        # 🔧 从队列中移除已处理的 0x05 消息（倒序移除以保持索引正确）
-        for idx in reversed(messages_to_remove):
-            try:
-                message_queue.pop(idx)
-            except IndexError:
-                logger.warning(f"⚠️ 无法移除索引 {idx}，队列长度: {len(message_queue)}")
+                    # 🔧 更新寄存器缓存
+                    if address == 0x25:
+                        self.reg_0x25 = value
+                    elif address == 0x26:
+                        self.reg_0x26 = value
+                    elif address == 0x45:
+                        self.reg_0x45 = value
+                    elif address == 0x46:
+                        self.reg_0x46 = value
+       
+            for idx in reversed(fpga_message_indices):
+                try:
+                    message_queue.pop(idx)
+                except IndexError:
+                    logger.warning(f"⚠️ 无法移除索引 {idx}，队列长度: {len(message_queue)}")
         
     except Exception as e:
         logger.error(f"❌ 处理寄存器响应异常: {e}", exc_info=True)

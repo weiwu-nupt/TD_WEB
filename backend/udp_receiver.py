@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 # 消息队列
 message_queue = deque(maxlen=4096)
 
+queue_lock = threading.Lock()
+
 class UDPReceiver:
     """UDP接收器类"""
     
@@ -91,15 +93,16 @@ class UDPReceiver:
                 
                 result = process_frame_by_type(parsed_msg, addr)
 
-                # 🔧 根据模式决定是否加入队列
-                if current_mode["mode"] == SystemMode.GROUND:
-                    # 地面检测模式：只添加LoRa接收消息
-                    if msg_type == 0x07:
-                        message_queue.append(result)
-                else:
-                    # 虚实融合模式：添加广播消息
-                    if msg_type in  [0x00, 0x01, 0x05]:
-                        message_queue.append(result)
+                with queue_lock:
+                    # 🔧 根据模式决定是否加入队列
+                    if current_mode["mode"] == SystemMode.GROUND:
+                        # 地面检测模式：只添加LoRa接收消息
+                        if msg_type == 0x07:
+                            message_queue.append(result)
+                    else:
+                        # 虚实融合模式：添加广播消息
+                        if msg_type in  [0x00, 0x01, 0x05]:
+                            message_queue.append(result)
  
             except socket.timeout:
                 continue
@@ -120,3 +123,7 @@ class UDPReceiver:
 def get_message_queue():
     """获取消息队列"""
     return message_queue
+
+def get_queue_lock():
+    """获取队列锁"""
+    return queue_lock

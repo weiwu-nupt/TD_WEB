@@ -20,6 +20,8 @@ async def virtual_event_stream():
     
     推送 0x00 (信号发送) 和 0x01 (信号接收) 帧
     """
+    from udp_receiver import get_queue_lock
+
     logger.info("✅ 虚实融合SSE客户端已连接")
     
     # 发送初始连接消息
@@ -35,33 +37,36 @@ async def virtual_event_stream():
                 continue
             
             message_queue = get_message_queue()
+            queue_lock = get_queue_lock()
+
+            with queue_lock:
             
-            # 🔧 遍历队列，查找并处理 0x00 和 0x01 消息
-            messages_to_remove = []
+                # 🔧 遍历队列，查找并处理 0x00 和 0x01 消息
+                messages_to_remove = []
             
-            for idx, msg in enumerate(list(message_queue)):
-                msg_type = msg.get("message_type")
+                for idx, msg in enumerate(list(message_queue)):
+                    msg_type = msg.get("message_type")
                 
-                # 只处理 0x00 (发送) 和 0x01 (接收)
-                if msg_type in [0x00, 0x01]:
-                    # 准备推送的事件数据
-                    event_data = {
-                        "type": "virtual_event",
-                        "data": msg
-                    }
+                    # 只处理 0x00 (发送) 和 0x01 (接收)
+                    if msg_type in [0x00, 0x01]:
+                        # 准备推送的事件数据
+                        event_data = {
+                            "type": "virtual_event",
+                            "data": msg
+                        }
                     
-                    yield f"data: {json.dumps(event_data)}\n\n"
-                    logger.info(f"📤 推送虚实融合事件: 类型=0x{msg_type:02X}")
+                        yield f"data: {json.dumps(event_data)}\n\n"
+                        logger.info(f"📤 推送虚实融合事件: 类型=0x{msg_type:02X}")
                     
-                    # 🔧 标记为待移除
-                    messages_to_remove.append(idx)
+                        # 🔧 标记为待移除
+                        messages_to_remove.append(idx)
             
-            # 🔧 从队列中移除已推送的消息（倒序移除以保持索引正确）
-            for idx in reversed(messages_to_remove):
-                try:
-                    message_queue.pop(idx)
-                except IndexError:
-                    logger.warning(f"⚠️ 无法移除索引 {idx}，队列长度: {len(message_queue)}")
+                # 🔧 从队列中移除已推送的消息（倒序移除以保持索引正确）
+                for idx in reversed(messages_to_remove):
+                    try:
+                        message_queue.pop(idx)
+                    except IndexError:
+                        logger.warning(f"⚠️ 无法移除索引 {idx}，队列长度: {len(message_queue)}")
             
                 await asyncio.sleep(0.5)  # 每500ms检查一次
             
