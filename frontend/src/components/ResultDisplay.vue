@@ -692,6 +692,12 @@
     const frameCount = msg.frame_count || 0
     console.log(`📥 SSE推送: 收到帧#${frameCount}`)
 
+    // 忽略超出发送范围的帧
+    if (frameCount > sendCount.value) {
+      console.warn(`⚠️ 忽略超出范围的帧: 帧#${frameCount} (当前发送计数=${sendCount.value})`)
+      return  // 直接返回，不做任何处理
+    }
+
     // 检测丢帧
     if (lastReceivedFrameCount > 0 && frameCount > lastReceivedFrameCount + 1) {
       const lostCount = frameCount - lastReceivedFrameCount - 1
@@ -699,6 +705,13 @@
 
       for (let i = 1; i <= lostCount; i++) {
         const lostFrameNum = lastReceivedFrameCount + i
+
+        // 🔧 丢失的帧也要检查是否在发送范围内
+        if (lostFrameNum > sendCount.value) {
+          console.warn(`⚠️ 丢失帧#${lostFrameNum} 超出发送范围，不计入统计`)
+          continue
+        }
+
         receivedMessages.value.push({
           id: `lost_${lostFrameNum}_${Date.now()}`,
           time: new Date().toLocaleTimeString(),
