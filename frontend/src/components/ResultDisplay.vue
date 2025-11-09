@@ -533,6 +533,7 @@
     } else {
       console.log('⚠️ loraFileData 被清空，停止所有发送')
       forceStopAll()
+      sentDataHex.value = ''  // 🔧 只有在文件被清空时才清空 sentDataHex
     }
   })
 
@@ -547,9 +548,9 @@
     }
 
     isSending.value = false
-    sentDataHex.value = ''
     console.log('  ✅ 所有操作已停止')
   }
+
 
   // 发送一次
   const sendOnce = async () => {
@@ -568,9 +569,10 @@
     }
 
     try {
+      // 🔧 从 0 开始计数，范围 0-255
       sendCount.value++
       if (sendCount.value > 255) {
-        sendCount.value = 1
+        sendCount.value = 0  // 🔧 改为 0
       }
 
       console.log(`📨 准备发送帧#${sendCount.value}`)
@@ -621,12 +623,12 @@
     }
 
     clearStats()
-    sendCount.value = 0
+    sendCount.value = -1  // 🔧 改为 -1，第一次 sendOnce() 会自增为 0
     isSending.value = true
 
     console.log('✅ 开始循环发送, 间隔:', sendInterval.value, '秒')
 
-    sendOnce()
+    sendOnce()  // 第一次发送帧#0
 
     sendTimer = setInterval(() => {
       console.log('⏰ 定时器触发')
@@ -675,9 +677,8 @@
   // 清空接收数据
   const clearReceivedData = () => {
     receivedMessages.value = []
-    sentDataHex.value = ''
     clearStats()
-    sendCount.value = 0
+    sendCount.value = 0  // 🔧 重置为 0
     sendStatus.value = { type: 'info', message: 'ℹ️ 数据已清空' }
   }
 
@@ -695,43 +696,41 @@
     // 检查帧号是否合理
     if (!isFrameCountValid(frameCount)) {
       console.warn(`⚠️ 忽略异常帧: 帧#${frameCount} (当前发送计数=${sendCount.value}, 上一个接收帧=${lastReceivedFrameCount})`)
-      return  // 数据错得离谱，直接忽略
+      return
     }
 
-    // 检测丢帧
-  if (lastReceivedFrameCount > 0) {
-    const expectedNext = (lastReceivedFrameCount % 256) + 1
-    const normalizedExpected = expectedNext > 255 ? 0 : expectedNext
+    // 🔧 检测丢帧（考虑 0-255 回环）
+    if (lastReceivedFrameCount !== null && lastReceivedFrameCount !== undefined) {
+      // 🔧 计算下一个期望的帧号（处理回环）
+      const expectedNext = (lastReceivedFrameCount + 1) % 256  // 0-255 循环
 
-    if (frameCount !== normalizedExpected) {
-      // 计算丢失的帧数（考虑回环）
-      const lostCount = calculateLostFrames(lastReceivedFrameCount, frameCount)
+      if (frameCount !== expectedNext) {
+        // 计算丢失的帧数（考虑回环）
+        const lostCount = calculateLostFrames(lastReceivedFrameCount, frameCount)
 
-      if (lostCount > 0 && lostCount < 128) {  // 🔧 丢帧数合理（小于128）
-        console.warn(`⚠️ 检测到丢帧: ${lostCount}帧`)
+        if (lostCount > 0 && lostCount < 128) {
+          console.warn(`⚠️ 检测到丢帧: ${lostCount}帧`)
 
-        let currentLost = lastReceivedFrameCount
-        for (let i = 0; i < lostCount; i++) {
-          currentLost = (currentLost % 256) + 1
-          if (currentLost > 255) currentLost = 0
+          let currentLost = lastReceivedFrameCount
+          for (let i = 0; i < lostCount; i++) {
+            currentLost = (currentLost + 1) % 256  // 🔧 使用 % 256 处理回环
 
-          receivedMessages.value.push({
-            id: `lost_${currentLost}_${Date.now()}_${i}`,
-            time: new Date().toLocaleTimeString(),
-            frame_count: currentLost,
-            data_hex: '(丢失)',
-            isLost: true,
-            hasError: false
-          })
-          berStats.lostFrames++
+            receivedMessages.value.push({
+              id: `lost_${currentLost}_${Date.now()}_${i}`,
+              time: new Date().toLocaleTimeString(),
+              frame_count: currentLost,
+              data_hex: '(丢失)',
+              isLost: true,
+              hasError: false
+            })
+            berStats.lostFrames++
+          }
+        } else if (lostCount >= 128) {
+          console.warn(`⚠️ 检测到异常丢帧数: ${lostCount}，忽略此帧#${frameCount}`)
+          return
         }
-      } else if (lostCount >= 128) {
-        // 丢帧数不合理，可能是乱序或异常，忽略此帧
-        console.warn(`⚠️ 检测到异常丢帧数: ${lostCount}，忽略此帧#${frameCount}`)
-        return
       }
     }
-  }
 
     // 添加接收帧
     const receivedMsg = {
@@ -762,8 +761,8 @@
 
     receivedMessages.value.push(receivedMsg)
 
-    // 更新总帧数
-    berStats.totalFrames = Math.max(berStats.totalFrames, frameCount)
+    // 🔧 总帧数 = 已发送的帧数
+    berStats.totalFrames = sendCount.value + 1  // 🔧 +1 因为从 0 开始
 
     // 计算误帧率
     if (berStats.totalFrames > 0) {
@@ -784,23 +783,22 @@
 
   // 检查帧号是否合理
   const isFrameCountValid = (frameCount) => {
-    // 第一帧总是有效的
-    if (lastReceivedFrameCount === 0) {
+    // 🔧 第一帧（lastReceivedFrameCount 为 null/undefined/0）总是有效
+    if (lastReceivedFrameCount === null ||
+      lastReceivedFrameCount === undefined ||
+      lastReceivedFrameCount === 0 && receivedMessages.value.length === 0) {
       return true
     }
 
-    // 🔧 修改：允许的范围改为上一帧后的 1-20 帧之间
-    const maxJump = 3  
+    const maxJump = 3
 
-    const minExpected = (lastReceivedFrameCount % 256) + 1
+    const minExpected = (lastReceivedFrameCount + 1) % 256  // 🔧 使用 % 256
     const maxExpected = (lastReceivedFrameCount + maxJump) % 256
 
     // 处理回环情况
     if (minExpected <= maxExpected) {
-      // 没有跨越255->0的边界
       return frameCount >= minExpected && frameCount <= maxExpected
     } else {
-      // 跨越了255->0的边界
       return frameCount >= minExpected || frameCount <= maxExpected
     }
   }
