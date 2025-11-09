@@ -692,37 +692,46 @@
     const frameCount = msg.frame_count || 0
     console.log(`📥 SSE推送: 收到帧#${frameCount}`)
 
-    // 忽略超出发送范围的帧
-    if (frameCount > sendCount.value) {
-      console.warn(`⚠️ 忽略超出范围的帧: 帧#${frameCount} (当前发送计数=${sendCount.value})`)
-      return  // 直接返回，不做任何处理
+    // 检查帧号是否合理
+    if (!isFrameCountValid(frameCount)) {
+      console.warn(`⚠️ 忽略异常帧: 帧#${frameCount} (当前发送计数=${sendCount.value}, 上一个接收帧=${lastReceivedFrameCount})`)
+      return  // 数据错得离谱，直接忽略
     }
 
     // 检测丢帧
-    if (lastReceivedFrameCount > 0 && frameCount > lastReceivedFrameCount + 1) {
-      const lostCount = frameCount - lastReceivedFrameCount - 1
-      console.warn(`⚠️ 检测到丢帧: 帧#${lastReceivedFrameCount + 1} 到 帧#${frameCount - 1}, 共${lostCount}帧`)
+  if (lastReceivedFrameCount > 0) {
+    const expectedNext = (lastReceivedFrameCount % 256) + 1
+    const normalizedExpected = expectedNext > 255 ? 0 : expectedNext
 
-      for (let i = 1; i <= lostCount; i++) {
-        const lostFrameNum = lastReceivedFrameCount + i
+    if (frameCount !== normalizedExpected) {
+      // 计算丢失的帧数（考虑回环）
+      const lostCount = calculateLostFrames(lastReceivedFrameCount, frameCount)
 
-        // 🔧 丢失的帧也要检查是否在发送范围内
-        if (lostFrameNum > sendCount.value) {
-          console.warn(`⚠️ 丢失帧#${lostFrameNum} 超出发送范围，不计入统计`)
-          continue
+      if (lostCount > 0 && lostCount < 128) {  // 🔧 丢帧数合理（小于128）
+        console.warn(`⚠️ 检测到丢帧: ${lostCount}帧`)
+
+        let currentLost = lastReceivedFrameCount
+        for (let i = 0; i < lostCount; i++) {
+          currentLost = (currentLost % 256) + 1
+          if (currentLost > 255) currentLost = 0
+
+          receivedMessages.value.push({
+            id: `lost_${currentLost}_${Date.now()}_${i}`,
+            time: new Date().toLocaleTimeString(),
+            frame_count: currentLost,
+            data_hex: '(丢失)',
+            isLost: true,
+            hasError: false
+          })
+          berStats.lostFrames++
         }
-
-        receivedMessages.value.push({
-          id: `lost_${lostFrameNum}_${Date.now()}`,
-          time: new Date().toLocaleTimeString(),
-          frame_count: lostFrameNum,
-          data_hex: '(丢失)',
-          isLost: true,
-          hasError: false
-        })
-        berStats.lostFrames++
+      } else if (lostCount >= 128) {
+        // 丢帧数不合理，可能是乱序或异常，忽略此帧
+        console.warn(`⚠️ 检测到异常丢帧数: ${lostCount}，忽略此帧#${frameCount}`)
+        return
       }
     }
+  }
 
     // 添加接收帧
     const receivedMsg = {
@@ -771,6 +780,48 @@
     if (receivedMessages.value.length > 100) {
       receivedMessages.value.shift()
     }
+  }
+
+  // 检查帧号是否合理
+  const isFrameCountValid = (frameCount) => {
+    // 第一帧总是有效的
+    if (lastReceivedFrameCount === 0) {
+      return true
+    }
+
+    // 🔧 修改：允许的范围改为上一帧后的 1-20 帧之间
+    const maxJump = 3  
+
+    const minExpected = (lastReceivedFrameCount % 256) + 1
+    const maxExpected = (lastReceivedFrameCount + maxJump) % 256
+
+    // 处理回环情况
+    if (minExpected <= maxExpected) {
+      // 没有跨越255->0的边界
+      return frameCount >= minExpected && frameCount <= maxExpected
+    } else {
+      // 跨越了255->0的边界
+      return frameCount >= minExpected || frameCount <= maxExpected
+    }
+  }
+
+  // 🔧 新增函数：计算丢失的帧数（考虑回环）
+  const calculateLostFrames = (lastFrame, currentFrame) => {
+    // 计算两个帧号之间的距离（考虑0-255回环）
+    let distance
+
+    if (currentFrame > lastFrame) {
+      // 没有回环: 比如 lastFrame=10, currentFrame=15, distance=4 (丢失11,12,13,14)
+      distance = currentFrame - lastFrame - 1
+    } else if (currentFrame < lastFrame) {
+      // 有回环: 比如 lastFrame=254, currentFrame=2, distance=3 (丢失255,0,1)
+      distance = (256 - lastFrame) + currentFrame - 1
+    } else {
+      // 相同帧号（重复接收）
+      distance = 0
+    }
+
+    return distance
   }
 
   // 检查单帧是否有错误
