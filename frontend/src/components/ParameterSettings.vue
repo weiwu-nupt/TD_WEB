@@ -238,6 +238,8 @@
             <select v-model="paramTabs.downlink.coding" class="select-field">
               <option value="4/5">4/5</option>
               <option value="4/6">4/6</option>
+              <option value="4/7">4/7</option>
+              <option value="4/8">4/8</option>
             </select>
           </div>
 

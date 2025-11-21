@@ -57,7 +57,7 @@ def build_uplink_registers(bandwidth: int, sf: int, coding: str, data_length: in
 def build_downlink_register(bandwidth: int, sf: int, coding: str):
     """构建下行通道的寄存器值"""
     bw = BANDWIDTH_MAP.get(bandwidth, 0)
-    coding_rate = 0 if coding == '4/5' else 1  # 下行只有4/5(0)和4/6(1)
+    coding_rate = CODING_MAP.get(coding, 0b001)  
     reg = 0x1D801 + (coding_rate << 8) + (sf << 4) + (bw << 2)
     # reg = 0xD801 + (coding_rate << 8) + (sf << 4) + (bw << 2)
     return reg
