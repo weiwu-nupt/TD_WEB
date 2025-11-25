@@ -340,10 +340,20 @@
     bitsPerFrame: 0  // 🔧 新增：每帧的比特数
   })
 
+  const receiveOnlyMode = ref(false)  // 🔧 新增：仅接收模式标志
+
   // 生成总帧数描述
   const getTotalFramesDescription = () => {
     if (berStats.totalFrames === 0) {
       return '从帧0到帧0'
+    }
+
+    // 🔧 新增：仅接收模式的描述
+    if (receiveOnlyMode.value) {
+      if (lastReceivedFrameCount === null) {
+        return `已接收 ${berStats.totalFrames} 帧 (仅接收模式)`
+      }
+      return `已接收 ${berStats.totalFrames} 帧，当前帧#${lastReceivedFrameCount} (仅接收)`
     }
 
     if (cycleCount.value === 0) {
@@ -561,7 +571,6 @@
   // 清空接收数据
   const clearReceivedData = () => {
     console.log('🗑️ 清空接收数据')
-    console.log('  清空前 - sendCount:', sendCount.value, 'cycleCount:', cycleCount.value, 'actualSent:', actualSentFrames.value)
 
     receivedMessages.value = []
     clearStats()
@@ -569,7 +578,9 @@
     cycleCount.value = 0
     actualSentFrames.value = 0
 
-    console.log('  清空后 - sendCount:', sendCount.value, 'cycleCount:', cycleCount.value, 'actualSent:', actualSentFrames.value)
+    lastReceivedFrameCount = null
+
+    console.log('  清空完成，准备接收新数据')
 
     sendStatus.value = { type: 'info', message: 'ℹ️ 数据已清空' }
   }
@@ -589,14 +600,21 @@
     console.log(`  isSending: ${isSending.value}`)
     console.log(`  sendCount: ${sendCount.value}`)
 
-    // 🔧 修复1：更好的旧数据判断
-    if (!isSending.value && sendCount.value < 0) {
+    //  判断是否为仅接收模式
+    receiveOnlyMode.value = (!isSending.value && actualSentFrames.value === 0)
+
+    if (receiveOnlyMode.value) {
+      console.log(`✅ 仅接收模式`)
+    }
+
+    // 🔧 修改：在仅接收模式下，不忽略数据
+    if (!receiveOnlyMode.value && !isSending.value && sendCount.value < 0) {
       console.warn(`⚠️ 忽略旧数据: 帧#${frameCount} (循环发送未开始)`)
       return
     }
 
-    // 检查帧号是否合理
-    if (!isFrameCountValid(frameCount)) {
+    // 检查帧号是否合理（仅接收模式下第一帧不检查）
+    if (lastReceivedFrameCount !== null && !isFrameCountValid(frameCount)) {
       console.warn(`⚠️ 忽略异常帧: 帧#${frameCount} (上一个接收帧=${lastReceivedFrameCount})`)
       return
     }
@@ -624,6 +642,7 @@
               hasError: false
             })
             berStats.lostFrames++
+            berStats.totalFrames++
           }
         } else if (lostCount >= 128) {
           console.warn(`⚠️ 检测到异常丢帧数: ${lostCount}，忽略此帧#${frameCount}`)
@@ -643,6 +662,7 @@
     }
 
     berStats.receivedFrames++
+    berStats.totalFrames++
     lastReceivedFrameCount = frameCount
 
     // 计算该帧的比特错误
@@ -666,8 +686,11 @@
 
     receivedMessages.value.push(receivedMsg)
 
-    // 使用实际发送的帧数
-    berStats.totalFrames = actualSentFrames.value
+    // 🔧 修改：在发送模式下，校正总帧数
+    if (!receiveOnlyMode.value) {
+      // 发送模式：总帧数应该等于实际发送的帧数
+      berStats.totalFrames = actualSentFrames.value
+    }
 
     // 🔧 修复2：正确计算总比特数 = 每帧比特数 × 总帧数
     berStats.totalBits = berStats.bitsPerFrame * berStats.totalFrames
@@ -853,6 +876,10 @@
 
     receivedMessages.value = []
     clearStats()
+
+    // 🔧 新增：清理仅接收模式的状态
+    receiveOnlyMode.value = false
+    lastReceivedFrameCount = null
   })
 </script>
 
