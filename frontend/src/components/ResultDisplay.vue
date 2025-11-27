@@ -73,8 +73,8 @@
                       <label>发送间隔 (秒):</label>
                       <input type="number"
                              v-model.number="sendInterval"
-                             min="0.1"
-                             step="0.1"
+                             min="0.01"
+                             step="0.01"
                              class="interval-input" />
                     </div>
 
@@ -117,6 +117,12 @@
                       <span class="status-label">发送状态:</span>
                       <span class="status-value" :class="{ sending: isSending }">
                         {{ isSending ? '🔄 循环发送中...' : '⏹️ 已停止' }}
+                      </span>
+                    </div>
+                    <div class="status-item">
+                      <span class="status-label">接收速率 (KB/S):</span>
+                      <span class="status-value" :class="{ active: dataRate > 0 }">
+                        {{ dataRate.toFixed(3) }}
                       </span>
                     </div>
                   </div>
@@ -310,6 +316,11 @@
   const receivedMessages = ref([])
   const receiveListRef = ref(null)  
   let lastReceivedFrameCount = null
+
+  // 在现有变量声明后添加：
+  const dataRate = ref(0)  // 🔧 新增：当前数据速率 (kbps)
+  const receiveTimestamps = ref([])  // 🔧 新增：接收时间戳记录 (用于滑动平均)
+  const RATE_WINDOW = 10  // 🔧 滑动平均窗口：10秒
 
   // SSE
   let eventSource = null
@@ -566,6 +577,8 @@
     berStats.errorBits = 0
     berStats.totalBits = 0
     actualSentFrames.value = 0
+    dataRate.value = 0
+    receiveTimestamps.value = []
   }
 
   // 清空接收数据
@@ -589,6 +602,40 @@
   const formatHexPreview = (hex) => {
     if (!hex) return ''
     return hex.length > 64 ? hex.substring(0, 64) + '...' : hex
+  }
+
+  //數據速率
+  const calculateDataRate = () => {
+    const now = Date.now()
+    const windowStart = now - RATE_WINDOW * 1000
+
+    // 移除超出时间窗口的记录
+    receiveTimestamps.value = receiveTimestamps.value.filter(
+      record => record.timestamp > windowStart
+    )
+
+    if (receiveTimestamps.value.length === 0) {
+      dataRate.value = 0
+      return
+    }
+
+    // 计算时间窗口内的总比特数
+    const totalBits = receiveTimestamps.value.reduce(
+      (sum, record) => sum + record.bits, 0
+    )
+
+    // 计算实际时间跨度（秒）
+    const oldestTimestamp = receiveTimestamps.value[0].timestamp
+    const timeSpan = (now - oldestTimestamp) / 1000
+
+    if (timeSpan > 0) {
+      // 数据速率 = 总比特数 / 时间跨度 / 1000 (转换为 kbps)
+      dataRate.value = (totalBits / timeSpan) / 1000
+    } else {
+      dataRate.value = 0
+    }
+
+    console.log(`📊 数据速率: ${dataRate.value.toFixed(3)} kbps (窗口: ${timeSpan.toFixed(2)}s, 比特数: ${totalBits})`)
   }
 
   // 🔧 修复1：处理接收到的消息
@@ -685,6 +732,16 @@
     }
 
     receivedMessages.value.push(receivedMsg)
+
+    // 🔧 新增：记录接收时间戳和比特数
+    const frameBits = msg.data_hex ? msg.data_hex.length * 4 : 0
+    receiveTimestamps.value.push({
+      timestamp: Date.now(),
+      bits: frameBits
+    })
+
+    // 🔧 新增：计算数据速率
+    calculateDataRate()
 
     // 🔧 修改：在发送模式下，校正总帧数
     if (!receiveOnlyMode.value) {
@@ -880,6 +937,9 @@
     // 🔧 新增：清理仅接收模式的状态
     receiveOnlyMode.value = false
     lastReceivedFrameCount = null
+
+    dataRate.value = 0
+    receiveTimestamps.value = []
   })
 </script>
 
@@ -1825,7 +1885,7 @@
   /* 🔧 发送状态盒子优化 */
   .send-status-box {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr); 
     gap: 12px;
     background: #f8f9fa;
     padding: 15px;
@@ -1836,12 +1896,26 @@
   .status-item {
     display: flex;
     flex-direction: column;
-    gap: 6px; /* 从8px改为6px */
+    gap: 6px;
     background: white;
-    padding: 12px; /* 从15px改为12px */
+    padding: 12px;
     border-radius: 8px;
     border-left: 4px solid #007bff;
     transition: all 0.3s ease;
+    position: relative; 
+  }
+
+  .status-unit {
+    font-size: 12px;
+    font-weight: 600;
+    color: #6c757d;
+    position: absolute;
+    bottom: 12px;
+    right: 12px;
+  }
+
+  .status-value.active {
+    color: #28a745;
   }
 
   .status-label {
