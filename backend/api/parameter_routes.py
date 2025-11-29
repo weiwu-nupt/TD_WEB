@@ -62,18 +62,25 @@ def build_downlink_register(bandwidth: int, sf: int, coding: str):
     # reg = 0xD801 + (coding_rate << 8) + (sf << 4) + (bw << 2)
     return reg
 
-def build_interference_registers(interference, bandwidth: int):
+def build_interference_registers(interference, bandwidth: int, mode_settings):
     """构建干扰寄存器"""
-    if not interference.enabled:
-        # 干扰关闭
-        return False
-    
-    # 构建0x0寄存器
+
+    mode = mode_settings.mode
     reg0 = 0
-    reg0 |= (1 << 0)  # bit 0: 固定置1
-    reg0 |= (1 << 1)  # bit 1: 固定置1
-    reg0 |= (1 << 2)  # bit 2: 固定置1
-    # bit 3: 固定置0
+    
+    # 根据模式设置对应的bit
+    if mode == 'receive_only':
+        reg0 |= (1 << 0)  # bit 0 = 1: 单收
+    elif mode == 'transmit_only':
+        reg0 |= (1 << 1)  # bit 1 = 1: 单发
+    elif mode == 'transceive':
+        reg0 |= (1 << 2)  # bit 2 = 1: 收发
+    elif mode == 'carrier':
+        reg0 |= (1 << 3)  # bit 3 = 1: 单载波
+
+    if not interference.enabled:
+        return (0x0, reg0)
+    
     reg0 |= (1 << 4)  # bit 4: 噪声开关 (enabled=True时置1)
     
     # bit 5: 是否为单音
@@ -183,7 +190,8 @@ async def write_parameters(params: AllChannelParameters):
         # 3. 干扰设置 (地址: 0x0, 0x2, 0x3, 0x4)
         interference_regs = build_interference_registers(
             params.interference,
-            params.uplink.bandwidth
+            params.uplink.bandwidth,
+            params.mode
         )
         if interference_regs:
             batch_operations.extend(interference_regs)

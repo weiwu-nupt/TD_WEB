@@ -35,6 +35,10 @@ class DopplerSettings(BaseModel):
     frequencyMax: float = 1000
     rate: float = 10
 
+
+class ModeSettings(BaseModel):
+    mode: str = 'transceive'  # 'receive_only', 'transmit_only', 'transceive', 'carrier'
+
 class AllChannelParameters(BaseModel):
     """所有通道参数"""
     lora_data_length: int
@@ -42,6 +46,7 @@ class AllChannelParameters(BaseModel):
     downlink: ChannelParameters
     interference: InterferenceSettings
     doppler: DopplerSettings
+    mode: ModeSettings
 
 # FPGA操作模型
 class FPGAReadRequest(BaseModel):

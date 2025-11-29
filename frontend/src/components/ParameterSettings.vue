@@ -37,6 +37,26 @@
         </div>
       </div>
 
+      <!-- 模式选择 -->
+      <div class="channel-card">
+        <div class="channel-header">
+          <i>🎛️</i>
+          <h3>工作模式</h3>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label>模式选择</label>
+            <select v-model="modeSettings.mode" class="select-field">
+              <option value="receive_only">单收</option>
+              <option value="transmit_only">单发</option>
+              <option value="transceive">收发</option>
+              <option value="carrier">单载波</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
       <!-- 上行通道 -->
       <div class="channel-card">
         <div class="channel-header">
@@ -373,6 +393,10 @@
     rate: 1000
   })
 
+  const modeSettings = reactive({
+    mode: 'transceive'  // 默认收发模式
+  })
+
   // 处理LoRa文件选择
   const handleLoraFileSelect = async (event) => {
     const file = event.target.files[0]
@@ -424,6 +448,7 @@
         if (data.downlink) Object.assign(paramTabs.downlink, data.downlink)
         if (data.interference) Object.assign(interferenceSettings, data.interference)
         if (data.doppler) Object.assign(dopplerSettings, data.doppler)
+        if (data.mode) Object.assign(modeSettings, data.mode)
 
         console.log('参数读取成功:', data)
         alert('✅ 参数读取成功')
@@ -450,7 +475,8 @@
         uplink_interference: paramTabs.uplink_interference,
         downlink: paramTabs.downlink,
         interference: interferenceSettings,
-        doppler: dopplerSettings
+        doppler: dopplerSettings,
+        mode: modeSettings
       }
 
       console.log('准备写入参数:', params)
@@ -887,6 +913,96 @@
 
     .range-separator {
       transform: rotate(90deg);
+    }
+  }
+
+  .mode-card {
+    border-color: #17a2b8;
+  }
+
+    .mode-card:hover {
+      border-color: #138496;
+      box-shadow: 0 8px 20px rgba(23, 162, 184, 0.15);
+    }
+
+  .mode-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+  }
+
+  .mode-option {
+    position: relative;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+
+    .mode-option input[type="radio"] {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+  .mode-content {
+    background: white;
+    border: 2px solid #e9ecef;
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    min-height: 140px;
+    justify-content: center;
+  }
+
+  .mode-option:hover .mode-content {
+    border-color: #17a2b8;
+    background: #f0f9ff;
+    transform: translateY(-3px);
+    box-shadow: 0 4px 12px rgba(23, 162, 184, 0.2);
+  }
+
+  .mode-option.active .mode-content {
+    border-color: #17a2b8;
+    background: linear-gradient(135deg, #e0f7fa, #b2ebf2);
+    box-shadow: 0 4px 12px rgba(23, 162, 184, 0.3);
+  }
+
+  .mode-option.active .mode-icon {
+    transform: scale(1.2);
+  }
+
+  .mode-icon {
+    font-size: 2.5rem;
+    transition: transform 0.3s ease;
+  }
+
+  .mode-label {
+    font-size: 16px;
+    font-weight: 700;
+    color: #2c3e50;
+    margin-top: 5px;
+  }
+
+  .mode-desc {
+    font-size: 12px;
+    color: #6c757d;
+    font-weight: 500;
+  }
+
+  @media (max-width: 768px) {
+    .mode-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 480px) {
+    .mode-grid {
+      grid-template-columns: 1fr;
     }
   }
 </style>
