@@ -79,7 +79,7 @@ def build_interference_registers(interference, bandwidth: int, mode_settings):
         reg0 |= (1 << 3)  # bit 3 = 1: 单载波
 
     if not interference.enabled:
-        return (0x0, reg0)
+        return [(0x0, reg0)]
     
     reg0 |= (1 << 4)  # bit 4: 噪声开关 (enabled=True时置1)
     
