@@ -123,8 +123,87 @@ class UDPSender:
         🔧 新增：发送原始字节数据（用于透传）
         """
         try:
-            self.socket.sendto(data, (target_ip, target_port))
+            socket.sendto(data, (target_ip, target_port))
             return True
         except Exception as e:
             logger.error(f"❌ 发送原始数据失败: {e}")
+            return False
+
+    @staticmethod
+    def send_node_operation(
+        node_settings: dict,
+        target_ip: str = "127.0.0.1",
+        target_port: int = 9100
+    ) -> bool:
+        """
+        发送节点配置消息 (0x08)
+    
+        消息格式:
+        - 帧同步头: 0x1ACFFC1D (4字节)
+        - 消息类型: 0x08 (1字节)
+        - 消息长度: (1字节)
+        - 节点ID: (1字节)
+        - 节点模式: (1字节) 0=单机, 1=组网, 2=虚实融合
+        - 组网总节点数: (1字节)
+        - 节点属性: (1字节) 0=普通, 1=母星
+        - 工作频率: (2字节, 大端序, kHz)
+        - 通道衰减: (1字节, dB)
+        - 前向链路带宽: (2字节, 大端序, kHz)
+        - 前向扩频因子: (1字节)
+        - 前向限幅率: (1字节)
+        - 反向链路带宽: (2字节, 大端序, kHz)
+        - 反向扩频因子: (1字节)
+        - 反向限幅率: (1字节)
+        - 自适应使能: (1字节, 0/1)
+        - 自适应SF: (1字节, 0/1)
+        - CRC: (2字节)
+        """
+        try:
+            # 节点模式映射
+            mode_map = {'standalone': 0, 'network': 1, 'virtual': 2}
+            node_mode = mode_map.get(node_settings.get('nodeMode', 'virtual'), 2)
+        
+            # 节点属性映射
+            type_map = {'normal': 0, 'mother': 1}
+            node_type = type_map.get(node_settings.get('nodeType', 'normal'), 0)
+        
+            # 构建消息内容
+            message_content = struct.pack('B', node_settings.get('nodeId', 1))  # 节点ID
+            message_content += struct.pack('B', node_mode)  # 节点模式
+            message_content += struct.pack('B', node_settings.get('totalNodes', 1))  # 组网总节点数
+            message_content += struct.pack('B', node_type)  # 节点属性
+            message_content += struct.pack('>I', node_settings.get('frequency', 900000))  # 工作频率 (4字节大端序)
+            message_content += struct.pack('B', node_settings.get('attenuation', 10))  # 通道衰减
+        
+            # 前向链路参数
+            forward = node_settings.get('forward', {})
+            message_content += struct.pack('>I', forward.get('bandwidth', 125))  # 带宽
+            message_content += struct.pack('B', forward.get('spreadingFactor', 7))  # 扩频因子
+            message_content += struct.pack('B', forward.get('clippingRate', 0))  # 限幅率
+        
+            # 反向链路参数
+            backward = node_settings.get('backward', {})
+            message_content += struct.pack('>I', backward.get('bandwidth', 125))  # 带宽
+            message_content += struct.pack('B', backward.get('spreadingFactor', 7))  # 扩频因子
+            message_content += struct.pack('B', backward.get('clippingRate', 0))  # 限幅率
+            message_content += struct.pack('B', 1 if backward.get('adaptiveEnable', False) else 0)  # 自适应使能
+            message_content += struct.pack('B', 1 if backward.get('adaptiveSF', False) else 0)  # 自适应SF
+        
+            # 构建完整消息 (消息类型 0x08)
+            full_message = build_message(0x08, message_content)
+        
+            # 获取目标配置
+            target = node_settings.get('target', {})
+            target_ip = target.get('ip', target_ip)
+            target_port = target.get('port', target_port)
+        
+            # 发送UDP
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+                sock.sendto(full_message, (target_ip, target_port))
+        
+            logger.info(f"✅ 节点配置已发送到 {target_ip}:{target_port}")
+            return True
+        
+        except Exception as e:
+            logger.error(f"❌ 发送节点配置失败: {e}")
             return False

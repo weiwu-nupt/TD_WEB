@@ -65,3 +65,32 @@ class LoRaSendMessage(BaseModel):
     timing_time: int     # 定时时间 (4字节)
     data_content: str    # 数据内容
     frame_count: int 
+
+class NodeSettings(BaseModel):
+    """虚实融合节点配置"""
+    nodeId: int  # 节点ID (1字节, 0-255)
+    nodeMode: str  # 节点模式: 'standalone', 'network', 'virtual'
+    totalNodes: int  # 组网总节点数 (1字节, 1-255)
+    nodeType: str  # 节点属性: 'mother', 'normal'
+    frequency: int  # 工作频率 (kHz) (4字节)
+    attenuation: int  # 通道衰减 (dB) (1字节, 1-70)
+    
+    class ForwardLink(BaseModel):
+        bandwidth: int  # 带宽 (kHz) (4字节)
+        spreadingFactor: int  # 扩频因子 (1字节, 6-12)
+        clippingRate: int  # 限幅率 (1字节)
+    
+    class BackwardLink(BaseModel):
+        bandwidth: int  # 带宽 (kHz) (4字节)
+        spreadingFactor: int  # 扩频因子 (1字节, 6-12)
+        clippingRate: int  # 限幅率 (1字节)
+        adaptiveEnable: bool  # 自适应使能 (1字节, 0/1)
+        adaptiveSF: bool  # 自适应SF (1字节, 0/1)
+    
+    class Target(BaseModel):
+        ip: str  # 目标IP
+        port: int  # 目标端口
+    
+    forward: ForwardLink
+    backward: BackwardLink
+    target: Target

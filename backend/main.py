@@ -17,9 +17,6 @@ from config import CONFIG, SystemMode, current_mode
 from udp_receiver import UDPReceiver
 from udp_sender import UDPSender
 
-# 🔧 导入虚实融合监控器
-from virtual_monitor import VirtualMonitor
-
 # 导入API路由
 from api import parameter_routes, lora_routes, mode_routes, virtual_routes
 
@@ -27,9 +24,6 @@ from api import parameter_routes, lora_routes, mode_routes, virtual_routes
 # 创建全局实例
 udp_receiver = UDPReceiver()
 udp_sender = UDPSender()
-
-# 🔧 创建虚实融合监控器实例
-virtual_monitor = None
 
 # 定义 lifespan 事件处理器
 @asynccontextmanager
@@ -52,11 +46,6 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 60)
     
     yield  # 应用运行中
-    
-    # 🔧 停止虚实融合监控器
-    if virtual_monitor:
-        virtual_monitor.stop()
-        logger.info("✓ VirtualMonitor 已关闭")
     
     udp_receiver.stop()
     logger.info("✓ UDP接收服务已关闭")
@@ -83,12 +72,11 @@ app.add_middleware(
 from frame_processor import init_sender as init_frame_processor_sender
 # 注入依赖到路由模块
 parameter_routes.init_sender(udp_sender)
+virtual_routes.init_sender(udp_sender)
 lora_routes.init_sender(udp_sender)
 mode_routes.init_receiver(udp_receiver)  
 init_frame_processor_sender(udp_sender)
 
-# 🔧 注入虚实融合监控器到模式路由
-mode_routes.init_virtual_monitor(lambda: virtual_monitor)
 
 # 注册路由
 app.include_router(parameter_routes.router)
@@ -99,14 +87,12 @@ app.include_router(virtual_routes.router)
 # 根路由
 @app.get("/")
 async def root():
-    monitor_status = virtual_monitor.get_status() if virtual_monitor else None
 
     return {
         "message": "地面检测系统后端运行中", 
         "version": "2.0.0",
         "config": CONFIG,
-        "current_mode": current_mode["mode"],
-        "virtual_monitor": monitor_status
+        "current_mode": current_mode["mode"]
     }
 
 if __name__ == "__main__":

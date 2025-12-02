@@ -50,6 +50,7 @@ FRAME_TYPE_VIRTUAL_TIMESTAMP = 0x02  # 虚实节点发送时间戳回传帧
 FRAME_TYPE_VIRTUAL_LINK = 0x03       # 虚实节点链路状态帧
 FRAME_TYPE_FPGA = 0x05           # FPGA读写帧
 FRAME_TYPE_LORA = 0x07           # LoRa收发帧
+FRAME_TYPE_NODE_SETTINGS = 0x08 # 节点参数设置帧
 
 
 

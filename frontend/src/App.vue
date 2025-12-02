@@ -46,59 +46,188 @@
           <p>Virtual-Reality Integration System</p>
         </div>
 
-        <!-- 事件列表区域 -->
+        <!-- 节点设置区域 -->
         <div class="mixed-section">
           <div class="section-header">
-            <i class="header-icon">📋</i>
-            <h2>通信事件</h2>
-            <div class="event-controls">
-              <!-- 🔧 删除UDP连接状态，添加SSE连接状态 -->
-              <div class="status-indicator" :class="{ connected: virtualSseConnected }">
-                <span class="status-dot"></span>
-                <span>{{ virtualSseConnected ? 'SSE已连接' : 'SSE未连接' }}</span>
-              </div>
-              <button class="clear-button" @click="clearEvents">
-                🗑️ 清空列表
-              </button>
-              <label class="auto-scroll">
-                <input type="checkbox" v-model="autoScroll">
-                自动滚动
-              </label>
-            </div>
+            <i class="header-icon">⚙️</i>
+            <h2>节点配置</h2>
           </div>
 
-          <div class="event-list-container">
-            <!-- 简化表头：只保留时间和数据 -->
-            <div class="event-header">
-              <div class="col-time">时间</div>
-              <div class="col-data">数据内容</div>
+          <div class="node-settings-content">
+            <!-- 基本配置 -->
+            <div class="settings-group">
+              <h3>基本配置</h3>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>节点ID</label>
+                  <input type="number"
+                         v-model.number="nodeSettings.nodeId"
+                         min="0"
+                         max="255"
+                         class="node-input"
+                         placeholder="0-255" />
+                </div>
+
+                <div class="form-group">
+                  <label>节点模式</label>
+                  <select v-model="nodeSettings.nodeMode" class="node-select">
+                    <option value="standalone">单机</option>
+                    <option value="network">组网</option>
+                    <option value="virtual">虚实融合</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label>组网总节点数</label>
+                  <input type="number"
+                         v-model.number="nodeSettings.totalNodes"
+                         min="1"
+                         max="255"
+                         class="node-input"
+                         placeholder="1-255" />
+                </div>
+
+                <div class="form-group">
+                  <label>节点属性</label>
+                  <select v-model="nodeSettings.nodeType" class="node-select">
+                    <option value="mother">母星</option>
+                    <option value="normal">普通</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label>工作频率 (kHz)</label>
+                  <input type="number"
+                         v-model.number="nodeSettings.frequency"
+                         class="node-input"
+                         placeholder="例如: 900000" />
+                </div>
+
+                <div class="form-group">
+                  <label>通道衰减 (dB)</label>
+                  <input type="number"
+                         v-model.number="nodeSettings.attenuation"
+                         min="1"
+                         max="70"
+                         class="node-input"
+                         placeholder="1-70" />
+                </div>
+              </div>
             </div>
 
-            <div class="event-list" ref="eventListRef">
-              <div v-for="event in virtualEvents"
-                   :key="event.id"
-                   class="event-item"
-                   :class="{
-                     'send-frame': event.type === 'send',
-                     'receive-frame': event.type === 'receive'
-                   }">
-                <div class="col-time">
-                  <span class="frame-type-badge" :class="event.type">
-                    {{ event.type === 'send' ? '📤 发送' : '📥 接收' }}
-                  </span>
-                  <span class="time-text">{{ event.time }}</span>
+            <!-- 前向链路参数 -->
+            <div class="settings-group">
+              <h3>前向链路参数</h3>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>带宽 (kHz)</label>
+                  <input type="number"
+                         v-model.number="nodeSettings.forward.bandwidth"
+                         class="node-input"
+                         placeholder="例如: 125, 250, 500" />
                 </div>
-                <div class="col-data">
-                  <div class="data-preview">{{ event.data }}</div>
-                </div>
-              </div>
 
-              <!-- 空状态 -->
-              <div v-if="virtualEvents.length === 0" class="empty-state">
-                <i>📡</i>
-                <p>暂无通信事件</p>
-                <small>虚实融合节点通信事件将在此显示</small>
+                <div class="form-group">
+                  <label>扩频因子</label>
+                  <input type="number"
+                         v-model.number="nodeSettings.forward.spreadingFactor"
+                         min="6"
+                         max="12"
+                         class="node-input"
+                         placeholder="6-12" />
+                </div>
+
+                <div class="form-group">
+                  <label>限幅率</label>
+                  <input type="number"
+                         v-model.number="nodeSettings.forward.clippingRate"
+                         class="node-input"
+                         placeholder="限幅率" />
+                </div>
               </div>
+            </div>
+
+            <!-- 反向链路参数 -->
+            <div class="settings-group">
+              <h3>反向链路参数</h3>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>带宽 (kHz)</label>
+                  <input type="number"
+                         v-model.number="nodeSettings.backward.bandwidth"
+                         class="node-input"
+                         placeholder="例如: 125, 250, 500" />
+                </div>
+
+                <div class="form-group">
+                  <label>扩频因子</label>
+                  <input type="number"
+                         v-model.number="nodeSettings.backward.spreadingFactor"
+                         min="6"
+                         max="12"
+                         class="node-input"
+                         placeholder="6-12" />
+                </div>
+
+                <div class="form-group">
+                  <label>限幅率</label>
+                  <input type="number"
+                         v-model.number="nodeSettings.backward.clippingRate"
+                         class="node-input"
+                         placeholder="限幅率" />
+                </div>
+
+                <div class="form-group switch-group">
+                  <label>自适应使能</label>
+                  <label class="toggle-switch">
+                    <input type="checkbox" v-model="nodeSettings.backward.adaptiveEnable">
+                    <span class="slider round"></span>
+                  </label>
+                </div>
+
+                <div class="form-group switch-group">
+                  <label>自适应SF</label>
+                  <label class="toggle-switch">
+                    <input type="checkbox" v-model="nodeSettings.backward.adaptiveSF">
+                    <span class="slider round"></span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- 目标配置 -->
+            <div class="settings-group">
+              <h3>目标节点</h3>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>目标IP</label>
+                  <input type="text"
+                         v-model="nodeSettings.target.ip"
+                         class="node-input"
+                         placeholder="192.168.1.100" />
+                </div>
+
+                <div class="form-group">
+                  <label>目标端口</label>
+                  <input type="number"
+                         v-model.number="nodeSettings.target.port"
+                         class="node-input"
+                         placeholder="9003" />
+                </div>
+              </div>
+            </div>
+
+            <!-- 操作按钮 -->
+            <div class="action-buttons">
+              <button class="send-button" @click="sendNodeSettings">
+                📤 发送配置
+              </button>
+            </div>
+
+            <!-- 状态提示 -->
+            <div v-if="nodeSettingsStatus" class="status-message" :class="nodeSettingsStatus.type">
+              <i>{{ nodeSettingsStatus.type === 'success' ? '✅' : '❌' }}</i>
+              {{ nodeSettingsStatus.message }}
             </div>
           </div>
         </div>
@@ -131,21 +260,6 @@
   const sharedLoraFileName = ref('')
   const sharedLoraFileData = ref('')
 
-  // 🔧 虚实融合事件列表
-  const virtualEvents = ref<Array<{
-    id: number
-    type: string
-    time: string
-    data: string
-  }>>([])
-
-  const autoScroll = ref(true)
-  const eventListRef = ref<HTMLElement>()
-
-  // 🔧 虚实融合SSE连接状态
-  const virtualSseConnected = ref(false)
-  let virtualEventSource: EventSource | null = null
-
   // 处理参数设置页面的文件选择
   const handleFileSelected = (fileName: string, fileData: string) => {
     sharedLoraFileName.value = fileName
@@ -158,6 +272,59 @@
     sharedLoraFileName.value = ''
     sharedLoraFileData.value = ''
     console.log('🧹 文件数据已清空')
+  }
+
+  // 节点设置
+  const nodeSettings = reactive({
+    nodeId: 1,
+    nodeMode: 'virtual',  // 'standalone', 'network', 'virtual'
+    totalNodes: 1,
+    nodeType: 'normal',  // 'mother', 'normal'
+    frequency: 900000,
+    attenuation: 10,
+    forward: {
+      bandwidth: 125,
+      spreadingFactor: 7,
+      clippingRate: 0
+    },
+    backward: {
+      bandwidth: 125,
+      spreadingFactor: 7,
+      clippingRate: 0,
+      adaptiveEnable: false,
+      adaptiveSF: false
+    },
+    target: {
+      ip: '192.168.1.100',
+      port: 9003
+    }
+  })
+
+  const nodeSettingsStatus = ref(null)
+
+  // 发送节点设置
+  const sendNodeSettings = async () => {
+    try {
+      nodeSettingsStatus.value = null
+
+      const response = await axios.post(`${API_BASE}/virtual/node-settings`, nodeSettings)
+
+      if (response.data.success) {
+        nodeSettingsStatus.value = {
+          type: 'success',
+          message: '✅ 节点配置发送成功'
+        }
+        console.log('节点配置发送成功:', response.data)
+      } else {
+        throw new Error(response.data.message || '发送失败')
+      }
+    } catch (error) {
+      console.error('发送节点配置失败:', error)
+      nodeSettingsStatus.value = {
+        type: 'error',
+        message: `❌ 发送失败: ${error.response?.data?.detail || error.message}`
+      }
+    }
   }
 
   // 模式切换API调用
@@ -187,149 +354,21 @@
   const returnToSelection = () => {
     console.log('🔙 返回系统选择')
 
-    // 🔧 先断开SSE连接
-    disconnectVirtualSSE()
-
     selectedSystem.value = ''
 
     if (sharedLoraFileData.value) {
       clearFileData()
     }
   }
-
-  // 🔧 断开虚实融合SSE
-  const disconnectVirtualSSE = () => {
-    if (virtualEventSource) {
-      console.log('🔌 断开虚实融合SSE连接')
-      virtualEventSource.close()
-      virtualEventSource = null
-      virtualSseConnected.value = false
-    }
-  }
-
-  // 🔧 连接虚实融合SSE
-  const connectVirtualSSE = () => {
-    // 先断开现有连接
-    disconnectVirtualSSE()
-
-    console.log('🔗 正在连接虚实融合SSE...')
-    virtualEventSource = new EventSource(`${API_BASE}/virtual/stream`)
-
-    virtualEventSource.onopen = () => {
-      virtualSseConnected.value = true
-      console.log('✅ 虚实融合SSE 连接成功')
-    }
-
-    virtualEventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
-
-        if (data.type === 'connected') {
-          console.log('📡 SSE 初始连接:', data.message)
-        } else if (data.type === 'virtual_event') {
-          handleVirtualEvent(data.data)
-        }
-      } catch (error) {
-        console.error('❌ SSE 消息解析错误:', error)
-      }
-    }
-
-    virtualEventSource.onerror = (error) => {
-      virtualSseConnected.value = false
-      console.error('❌ 虚实融合SSE 连接错误')
-
-      // 🔧 只在虚实融合模式下才重连
-      setTimeout(() => {
-        if (selectedSystem.value === 'mixed') {
-          console.log('🔄 尝试重新连接虚实融合SSE...')
-          connectVirtualSSE()
-        }
-      }, 5000)
-    }
-  }
-
-  // 🔧 处理虚实融合事件
-  const handleVirtualEvent = (msg: any) => {
-    const msgType = msg.message_type
-
-    // 只处理 0x00 (发送) 和 0x01 (接收)
-    if (msgType !== 0x00 && msgType !== 0x01) {
-      return
-    }
-
-    const now = new Date()
-    const time = now.toLocaleTimeString('zh-CN', {
-      hour12: false,
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      fractionalSecondDigits: 3
-    })
-
-    let eventType = ''
-    let eventData = ''
-
-    if (msgType === 0x00) {
-      // 🔧 信号发送帧 - 使用 virtual_send_info
-      eventType = 'send'
-      const info = msg.virtual_send_info || {}
-      eventData = `发送时间: ${info.send_time || '无'}, 传播参数: ${info.propagation_param || '无'}, 数据: ${info.data_hex || '无'}`
-    } else if (msgType === 0x01) {
-      // 🔧 信号接收帧 - 使用 virtual_receive_info
-      eventType = 'receive'
-      const info = msg.virtual_receive_info || {}
-      eventData = `接收时间: ${info.receive_time || '无'}, 时间戳: ${info.receive_timestamp || '无'}, 数据: ${info.data_hex || '无'}`
-    }
-
-    virtualEvents.value.push({
-      id: Date.now() + Math.random(),
-      type: eventType,
-      time,
-      data: eventData
-    })
-
-    // 限制列表长度
-    if (virtualEvents.value.length > 100) {
-      virtualEvents.value.shift()
-    }
-
-    // 自动滚动
-    if (autoScroll.value) {
-      nextTick(() => {
-        if (eventListRef.value) {
-          eventListRef.value.scrollTop = eventListRef.value.scrollHeight
-        }
-      })
-    }
-  }
-
-  // 清空虚实事件
-  const clearEvents = () => {
-    virtualEvents.value = []
-    console.log('🗑️ 事件列表已清空')
-  }
-
+   
   // 处理系统切换
   const handleSystemChange = (system: string) => {
     console.log(`🔄 handleSystemChange: ${system}`)
-
-    if (system === 'mixed') {
-      // 🔧 切换到虚实融合模式 - 连接SSE
-      connectVirtualSSE()
-    } else {
-      // 🔧 切换到其他模式 - 断开SSE
-      disconnectVirtualSSE()
-    }
   }
 
   // 监听系统切换
   watch(selectedSystem, (newValue, oldValue) => {
     console.log(`🔄 系统切换: ${oldValue} -> ${newValue}`)
-
-    // 🔧 切换时先断开旧的SSE连接
-    if (oldValue === 'mixed') {
-      disconnectVirtualSSE()
-    }
 
     if (oldValue === 'ground' && newValue !== 'ground') {
       clearFileData()
@@ -346,9 +385,6 @@
   // 组件卸载
 onUnmounted(() => {
   console.log('🛑 App.vue 卸载')
-  
-  // 🔧 断开SSE连接
-  disconnectVirtualSSE()
 })
 </script>
 
@@ -1074,5 +1110,174 @@ onUnmounted(() => {
     color: #e0c3fc;
     word-break: break-all;
     line-height: 1.4;
+  }
+
+  .node-settings-content {
+    padding: 2rem;
+  }
+
+  .settings-group {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 1rem;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+    transition: transform 0.3s ease, border-color 0.3s ease;
+  }
+
+    .settings-group:hover {
+      border-color: rgba(155, 181, 255, 0.3);
+      transform: translateY(-2px);
+    }
+
+    .settings-group h3 {
+      color: #e0c3fc; /* 更亮的紫色 */
+      font-size: 1.1rem;
+      margin: 0 0 1.2rem 0;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      letter-spacing: 1px;
+    }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.25rem;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+    .form-group label {
+      color: #b8c5d6;
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+
+  .node-input,
+  .node-select {
+    background: rgba(0, 0, 0, 0.2); /* 深色背景，增加对比度 */
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    color: #ffffff; /* 关键修改：暗色模式下文字改为白色 */
+    font-size: 0.95rem;
+    width: 100%;
+    box-sizing: border-box; /* 防止padding撑破布局 */
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+    .node-input::placeholder {
+      color: rgba(255, 255, 255, 0.3);
+    }
+
+    .node-input:focus,
+    .node-select:focus {
+      outline: none;
+      border-color: #9bb5ff;
+      background: rgba(0, 0, 0, 0.4);
+      box-shadow: 0 0 15px rgba(155, 181, 255, 0.15); /* 科技感光晕 */
+    }
+    .node-select option {
+      background-color: #16213e;
+      color: white;
+    }
+
+  .switch-group {
+    display: flex;
+    flex-direction: row; /* 让标签和开关在一行显示 */
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.05); /* 给开关加个小背景条 */
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    height: 52px; /* 与输入框高度对其 */
+  }
+
+
+    .switch-group label {
+      margin: 0;
+      cursor: pointer;
+    }
+
+      .switch-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    padding: 0.75rem 0;
+  }
+
+    .switch-label input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+
+  .action-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .send-button {
+    background: linear-gradient(135deg, #28a745, #218838);
+    color: white;
+    border: none;
+    padding: 0.75rem 2rem;
+    border-radius: 0.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+    .send-button:hover {
+      background: linear-gradient(135deg, #218838, #1e7e34);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+    }
+
+  .status-message {
+    margin-top: 1rem;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+  }
+
+    .status-message.success {
+      background: rgba(40, 167, 69, 0.2);
+      color: #28a745;
+      border: 1px solid rgba(40, 167, 69, 0.4);
+    }
+
+    .status-message.error {
+      background: rgba(220, 53, 69, 0.2);
+      color: #dc3545;
+      border: 1px solid rgba(220, 53, 69, 0.4);
+    }
+
+  @media (max-width: 768px) {
+    .form-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .node-settings-content {
+      padding: 1.5rem;
+    }
   }
 </style>
