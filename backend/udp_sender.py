@@ -146,16 +146,15 @@ class UDPSender:
         - 节点模式: (1字节) 0=单机, 1=组网, 2=虚实融合
         - 组网总节点数: (1字节)
         - 节点属性: (1字节) 0=普通, 1=母星
-        - 工作频率: (2字节, 大端序, kHz)
+        - 工作频率: (4字节, 大端序, kHz)
         - 通道衰减: (1字节, dB)
-        - 前向链路带宽: (2字节, 大端序, kHz)
+        - 前向链路带宽: (4字节, 大端序, kHz)
         - 前向扩频因子: (1字节)
-        - 前向限幅率: (1字节)
-        - 反向链路带宽: (2字节, 大端序, kHz)
+        - 前向编码: (1字节) 1=4/5, 2=4/6, 3=4/7, 4=4/8
+        - 反向链路带宽: (4字节, 大端序, kHz)
         - 反向扩频因子: (1字节)
-        - 反向限幅率: (1字节)
-        - 自适应使能: (1字节, 0/1)
-        - 自适应SF: (1字节, 0/1)
+        - 反向编码: (1字节) 1=4/5, 2=4/6, 3=4/7, 4=4/8
+        - 反向扩频因子2: (1字节)
         - CRC: (2字节)
         """
         try:
@@ -166,6 +165,9 @@ class UDPSender:
             # 节点属性映射
             type_map = {'normal': 0, 'mother': 1}
             node_type = type_map.get(node_settings.get('nodeType', 'normal'), 0)
+        
+            # 编码映射
+            coding_map = {'4/5': 1, '4/6': 2, '4/7': 3, '4/8': 4}
         
             # 构建消息内容
             message_content = struct.pack('B', node_settings.get('nodeId', 1))  # 节点ID
@@ -179,15 +181,16 @@ class UDPSender:
             forward = node_settings.get('forward', {})
             message_content += struct.pack('>I', forward.get('bandwidth', 125))  # 带宽
             message_content += struct.pack('B', forward.get('spreadingFactor', 7))  # 扩频因子
-            message_content += struct.pack('B', forward.get('clippingRate', 0))  # 限幅率
+            forward_coding = coding_map.get(forward.get('coding', '4/5'), 1)
+            message_content += struct.pack('B', forward_coding)  # 编码
         
             # 反向链路参数
             backward = node_settings.get('backward', {})
             message_content += struct.pack('>I', backward.get('bandwidth', 125))  # 带宽
             message_content += struct.pack('B', backward.get('spreadingFactor', 7))  # 扩频因子
-            message_content += struct.pack('B', backward.get('clippingRate', 0))  # 限幅率
-            message_content += struct.pack('B', 1 if backward.get('adaptiveEnable', False) else 0)  # 自适应使能
-            message_content += struct.pack('B', 1 if backward.get('adaptiveSF', False) else 0)  # 自适应SF
+            backward_coding = coding_map.get(backward.get('coding', '4/5'), 1)
+            message_content += struct.pack('B', backward_coding)  # 编码
+            message_content += struct.pack('B', backward.get('spreadingFactor2', 7))  # 扩频因子2
         
             # 构建完整消息 (消息类型 0x08)
             full_message = build_message(0x08, message_content)

@@ -138,11 +138,13 @@
                 </div>
 
                 <div class="form-group">
-                  <label>限幅率</label>
-                  <input type="number"
-                         v-model.number="nodeSettings.forward.clippingRate"
-                         class="node-input"
-                         placeholder="限幅率" />
+                  <label>编码</label>
+                  <select v-model="nodeSettings.forward.coding" class="node-select">
+                    <option value="4/5">4/5</option>
+                    <option value="4/6">4/6</option>
+                    <option value="4/7">4/7</option>
+                    <option value="4/8">4/8</option>
+                  </select>
                 </div>
               </div>
             </div>
@@ -170,27 +172,23 @@
                 </div>
 
                 <div class="form-group">
-                  <label>限幅率</label>
+                  <label>编码</label>
+                  <select v-model="nodeSettings.backward.coding" class="node-select">
+                    <option value="4/5">4/5</option>
+                    <option value="4/6">4/6</option>
+                    <option value="4/7">4/7</option>
+                    <option value="4/8">4/8</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label>扩频因子2</label>
                   <input type="number"
-                         v-model.number="nodeSettings.backward.clippingRate"
+                         v-model.number="nodeSettings.backward.spreadingFactor2"
+                         min="6"
+                         max="12"
                          class="node-input"
-                         placeholder="限幅率" />
-                </div>
-
-                <div class="form-group switch-group">
-                  <label>自适应使能</label>
-                  <label class="toggle-switch">
-                    <input type="checkbox" v-model="nodeSettings.backward.adaptiveEnable">
-                    <span class="slider round"></span>
-                  </label>
-                </div>
-
-                <div class="form-group switch-group">
-                  <label>自适应SF</label>
-                  <label class="toggle-switch">
-                    <input type="checkbox" v-model="nodeSettings.backward.adaptiveSF">
-                    <span class="slider round"></span>
-                  </label>
+                         placeholder="6-12" />
                 </div>
               </div>
             </div>
@@ -285,14 +283,13 @@
     forward: {
       bandwidth: 125,
       spreadingFactor: 7,
-      clippingRate: 0
+      coding: '4/5'
     },
     backward: {
       bandwidth: 125,
       spreadingFactor: 7,
-      clippingRate: 0,
-      adaptiveEnable: false,
-      adaptiveSF: false
+      coding: '4/5',
+      spreadingFactor2: 7
     },
     target: {
       ip: '192.168.1.100',
@@ -1117,27 +1114,19 @@ onUnmounted(() => {
   }
 
   .settings-group {
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(255, 255, 255, 0.05);
     border-radius: 1rem;
     padding: 1.5rem;
     margin-bottom: 1.5rem;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
-    transition: transform 0.3s ease, border-color 0.3s ease;
+    border: 1px solid rgba(255, 255, 255, 0.1);
   }
 
-    .settings-group:hover {
-      border-color: rgba(155, 181, 255, 0.3);
-      transform: translateY(-2px);
-    }
-
     .settings-group h3 {
-      color: #e0c3fc; /* 更亮的紫色 */
+      color: #9bb5ff;
       font-size: 1.1rem;
-      margin: 0 0 1.2rem 0;
+      margin: 0 0 1rem 0;
       padding-bottom: 0.75rem;
       border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-      letter-spacing: 1px;
     }
 
   .form-grid {
@@ -1160,52 +1149,28 @@ onUnmounted(() => {
 
   .node-input,
   .node-select {
-    background: rgba(0, 0, 0, 0.2); /* 深色背景，增加对比度 */
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 0.5rem;
     padding: 0.75rem 1rem;
-    color: #ffffff; /* 关键修改：暗色模式下文字改为白色 */
-    font-size: 0.95rem;
-    width: 100%;
-    box-sizing: border-box; /* 防止padding撑破布局 */
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    color: black;
+    font-size: 1rem;
+    transition: all 0.3s ease;
   }
-
-    .node-input::placeholder {
-      color: rgba(255, 255, 255, 0.3);
-    }
 
     .node-input:focus,
     .node-select:focus {
       outline: none;
       border-color: #9bb5ff;
-      background: rgba(0, 0, 0, 0.4);
-      box-shadow: 0 0 15px rgba(155, 181, 255, 0.15); /* 科技感光晕 */
-    }
-    .node-select option {
-      background-color: #16213e;
-      color: white;
+      background: rgba(255, 255, 255, 0.15);
+      box-shadow: 0 0 0 3px rgba(155, 181, 255, 0.2);
     }
 
-  .switch-group {
-    display: flex;
-    flex-direction: row; /* 让标签和开关在一行显示 */
-    justify-content: space-between;
-    align-items: center;
-    background: rgba(255, 255, 255, 0.05); /* 给开关加个小背景条 */
-    padding: 0.5rem 1rem;
-    border-radius: 0.5rem;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    height: 52px; /* 与输入框高度对其 */
+  .node-select {
+    cursor: pointer;
   }
 
-
-    .switch-group label {
-      margin: 0;
-      cursor: pointer;
-    }
-
-      .switch-label {
+  .switch-label {
     display: flex;
     align-items: center;
     gap: 0.5rem;

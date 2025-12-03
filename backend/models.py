@@ -78,14 +78,13 @@ class NodeSettings(BaseModel):
     class ForwardLink(BaseModel):
         bandwidth: int  # 带宽 (kHz) (4字节)
         spreadingFactor: int  # 扩频因子 (1字节, 6-12)
-        clippingRate: int  # 限幅率 (1字节)
+        coding: str  # 编码 (1字节): '4/5', '4/6', '4/7', '4/8'
     
     class BackwardLink(BaseModel):
         bandwidth: int  # 带宽 (kHz) (4字节)
         spreadingFactor: int  # 扩频因子 (1字节, 6-12)
-        clippingRate: int  # 限幅率 (1字节)
-        adaptiveEnable: bool  # 自适应使能 (1字节, 0/1)
-        adaptiveSF: bool  # 自适应SF (1字节, 0/1)
+        coding: str  # 编码 (1字节): '4/5', '4/6', '4/7', '4/8'
+        spreadingFactor2: int  # 扩频因子2 (1字节, 6-12)
     
     class Target(BaseModel):
         ip: str  # 目标IP
