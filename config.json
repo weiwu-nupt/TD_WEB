@@ -7,8 +7,7 @@
   "udp_receive_port": 8002,
   "arm_ip": "192.168.1.1",
   "arm_port": 8003,
-  "serial_port": "/dev/ttyUSB0",
-  //"Linux": "/dev/ttyUSB0"  "Windows": "COM1","COM2..."
+  "serial_port": "COM1",
   "serial_baudrate": 115200,
   "comments": {
     "local_ip": "本地IP地址",

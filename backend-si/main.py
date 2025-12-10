@@ -32,6 +32,7 @@ async def lifespan(app: FastAPI):
     
     # 🔧 启动串口通信（替代UDP）
     try:
+        #"Linux": "/dev/ttyUSB0"  "Windows": "COM1","COM2..."
         serial_comm = SerialCommunicator(
             port=CONFIG["serial_port"],
             baudrate=CONFIG["serial_baudrate"]

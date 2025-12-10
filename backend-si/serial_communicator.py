@@ -19,7 +19,7 @@ class SerialCommunicator:
     串口通信类 
     """
     
-    def __init__(self, port: str = "/dev/ttyUSB0", baudrate: int = 115200):
+    def __init__(self, port: str = "COM1", baudrate: int = 115200):
         """
         初始化串口通信
         
