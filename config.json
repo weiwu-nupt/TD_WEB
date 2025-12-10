@@ -7,12 +7,17 @@
   "udp_receive_port": 8002,
   "arm_ip": "192.168.1.1",
   "arm_port": 8003,
+  "serial_port": "/dev/ttyUSB0",
+  //"Linux": "/dev/ttyUSB0"  "Windows": "COM1","COM2..."
+  "serial_baudrate": 115200,
   "comments": {
     "local_ip": "本地IP地址",
     "backend_port": "FastAPI后端服务端口",
     "vue_dev_port": "Vue开发服务器端口",
     "udp_receive_port": "UDP接收监听端口",
     "arm_ip": "ARM接收IP地址",
-    "arm_port": "ARM接收监听端口"
+    "arm_port": "ARM接收监听端口",
+    "serial_port": "串口",
+    "serial_baudrate": "波特率"
   }
 }

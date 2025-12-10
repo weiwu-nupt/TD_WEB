@@ -10,12 +10,12 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["Parameters"])
 
-udp_sender = None
+serial_sender = None
 
 def init_sender(sender):
     """初始化发送器引用"""
-    global udp_sender
-    udp_sender = sender
+    global serial_sender
+    serial_sender = sender
 
 # 带宽映射
 BANDWIDTH_MAP = {
@@ -215,11 +215,9 @@ async def write_parameters(params: AllChannelParameters):
             batch_operations.extend(doppler_regs)
         
         # 使用 send_fpga_operation 批量写入
-        success = udp_sender.send_fpga_operation(
-            operation_type=1,  # 写操作
-            batch_operations=batch_operations,
-            target_ip=CONFIG["arm_ip"],
-            target_port=CONFIG["arm_port"]
+        success = serial_sender.send_fpga_operation(
+            operation_type=1,
+            batch_operations=batch_operations
         )
         
         if not success:
