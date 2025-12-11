@@ -52,8 +52,10 @@ async def lora_receive_stream():
     
     async def event_generator():
         """生成SSE事件"""
+
+        from serial_communicator import get_message_queue
         
-        message_queue = serial_sender.get_message_queue()
+        message_queue = get_message_queue()
         message_queue.clear()
         
         # 发送初始连接消息

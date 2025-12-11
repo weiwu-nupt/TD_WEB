@@ -14,7 +14,7 @@ from serial_communicator import SerialCommunicator
 
 # 导入API路由
 from api import parameter_routes, lora_routes, mode_routes, virtual_routes
-
+from frame_processor import init_sender as init_frame_processor_sender # 导入放在这里
 
 # 🔧 创建全局串口通信器实例
 serial_comm = None
@@ -41,6 +41,17 @@ async def lifespan(app: FastAPI):
         if serial_comm.is_connected():
             serial_comm.start_receiving()
             logger.info("✓ 串口通信已启动（发送+接收）")
+            
+            # ==========================================
+            # 关键修改：在这里注入依赖！确保 serial_comm 已实例化
+            # ==========================================
+            parameter_routes.init_sender(serial_comm)
+            lora_routes.init_sender(serial_comm)
+            virtual_routes.init_sender(serial_comm)
+            mode_routes.init_receiver(serial_comm) 
+            init_frame_processor_sender(serial_comm)
+            logger.info("✓ 路由依赖注入完成")
+            
         else:
             logger.error("✗ 串口连接失败")
     
@@ -76,15 +87,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-from frame_processor import init_sender as init_frame_processor_sender
 
-# 注入依赖到路由模块
-parameter_routes.init_sender(serial_comm)
-lora_routes.init_sender(serial_comm)
-virtual_routes.init_sender(serial_comm)
-mode_routes.init_receiver(serial_comm) 
-init_frame_processor_sender(serial_comm)
-
+# --- 删除或注释掉原来在这里的 init_sender 调用 ---
+# parameter_routes.init_sender(serial_comm)  <-- 这里删掉
+# lora_routes.init_sender(serial_comm)       <-- 这里删掉
+# virtual_routes.init_sender(serial_comm)    <-- 这里删掉
+# mode_routes.init_receiver(serial_comm)     <-- 这里删掉
+# init_frame_processor_sender(serial_comm)   <-- 这里删掉
 
 # 注册路由
 app.include_router(parameter_routes.router)
@@ -95,7 +104,6 @@ app.include_router(virtual_routes.router)
 # 根路由
 @app.get("/")
 async def root():
-
     return {
         "message": "地面检测系统后端运行中", 
         "version": "2.0.0",

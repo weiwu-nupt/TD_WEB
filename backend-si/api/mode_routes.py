@@ -7,6 +7,8 @@ from typing import Callable, Optional
 
 from config import SystemMode, current_mode
 
+from serial_communicator import get_message_queue
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/mode", tags=["Mode"])
@@ -68,7 +70,7 @@ async def switch_mode(mode: SystemMode):
         logger.info(f"🔄 切换系统模式: {old_mode} → {mode}")
         
         # 清空消息队列
-        message_queue = serial_receiver.get_message_queue()
+        message_queue = get_message_queue()
         old_count = len(message_queue)
         message_queue.clear()
         logger.info(f"模式切换时清空了 {old_count} 条旧消息")
