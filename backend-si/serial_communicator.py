@@ -244,7 +244,7 @@ class SerialCommunicator:
                 message_content += data_with_count
                 
                 # 构建完整消息
-                full_message = build_message(FRAME_TYPE_LORA, message_content)
+                full_message = build_message(0x07, message_content)
                 
                 bytes_written = self.serial.write(full_message)
                 self.serial.flush()
@@ -310,6 +310,17 @@ class SerialCommunicator:
         except Exception as e:
             logger.error(f"❌ 节点配置发送失败: {e}")
             return False
+
+    def send_raw_data(self, data: bytes, target_ip: str, target_port: int) -> bool:
+
+        try:
+            with self.send_lock:
+                bytes_written = self.serial.write(data)
+                self.serial.flush()
+        except Exception as e:
+            logger.error(f"❌ 发送原始数据失败: {e}")
+            return False
+
     
     def get_status(self):
         """获取串口状态"""

@@ -9,12 +9,12 @@ from config import (
 
 logger = logging.getLogger(__name__)
 
-udp_sender = None
+serial_sender = None
 
 def init_sender(sender):
     """初始化发送器引用"""
-    global udp_sender
-    udp_sender = sender
+    global serial_sender
+    serial_sender = sender
 
 def process_virtual_send_frame(parsed_msg: dict, addr: tuple) -> dict:
     """
@@ -33,15 +33,13 @@ def process_virtual_send_frame(parsed_msg: dict, addr: tuple) -> dict:
         data_packet = message_content[8:]
         
         # 🔧 透传到ARM
-        if udp_sender:
+        if serial_sender:
             # 重新构建完整消息并发送
             from frame_parser import build_message
             full_message = build_message(FRAME_TYPE_VIRTUAL_SEND, message_content)
             
-            success = udp_sender.send_raw_data(
-                full_message,
-                target_ip=CONFIG["arm_ip"],
-                target_port=CONFIG["arm_port"]
+            success = serial_sender.send_raw_data(
+                full_message
             )
         
         return {
@@ -78,15 +76,11 @@ def process_virtual_receive_frame(parsed_msg: dict, addr: tuple) -> dict:
         receive_timestamp = struct.unpack('>I', message_content[4:8])[0]
         data_packet = message_content[8:]
         
-        if udp_sender:
+        if serial_sender:
             from frame_parser import build_message
             full_message = build_message(FRAME_TYPE_VIRTUAL_RECEIVE, message_content)
             
-            success = udp_sender.send_raw_data(
-                full_message,
-                target_ip=CONFIG["arm_ip"],
-                target_port=CONFIG["arm_port"]
-            )
+            success = serial_sender.send_raw_data(full_message)
         
         return {
             "message_type": FRAME_TYPE_VIRTUAL_RECEIVE,
