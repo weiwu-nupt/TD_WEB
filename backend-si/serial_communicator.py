@@ -244,7 +244,7 @@ class SerialCommunicator:
                 message_content += data_with_count
                 
                 # 构建完整消息
-                full_message = build_message(0x06, message_content)
+                full_message = build_message(FRAME_TYPE_LORA, message_content)
                 
                 bytes_written = self.serial.write(full_message)
                 self.serial.flush()
